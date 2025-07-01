@@ -192,7 +192,31 @@ const SwipeScreen = () => {
               </View>
             )}
           </TouchableOpacity>
-
+          // ADD this button somewhere in your ProfileScreen.tsx (near other
+          buttons/options) // Debug Button
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Debug")}
+            style={{
+              backgroundColor: "#E91E63",
+              padding: 15,
+              borderRadius: 8,
+              marginVertical: 10,
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                color: "white",
+                fontWeight: "bold",
+                fontSize: 16,
+              }}
+            >
+              🐛 Dating Debug & Mock Users
+            </Text>
+          </TouchableOpacity>
+          // end debug button // Make sure you import navigation at the top: //
+          import {useNavigation} from "@react-navigation/native"; // const
+          navigation = useNavigation();
           {/* Settings Button */}
           <TouchableOpacity onPress={handleSettingsPress}>
             <MaterialIcons name="settings" size={24} color="white" />

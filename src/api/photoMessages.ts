@@ -186,3 +186,29 @@ export const getPhotoMessageConversations = async (): Promise<
     return response.data;
   }, "Failed to get photo message conversations");
 };
+
+export interface EnhancedPhotoConversation {
+  userId: number;
+  username: string;
+  displayName: string;
+  profileImageUrl?: string;
+  unreadCount: number;
+  lastMessageAt: string;
+  isMatch: boolean;
+  isNewMatch: boolean;
+  matchedAt?: string;
+}
+
+/**
+ * Get all photo message conversations including new dating matches
+ */
+export const getEnhancedPhotoMessageConversations = async (): Promise<
+  EnhancedPhotoConversation[]
+> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.get<EnhancedPhotoConversation[]>(
+      "/photo-messages/conversations"
+    );
+    return response.data;
+  }, "Failed to get enhanced photo message conversations");
+};

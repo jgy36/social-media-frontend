@@ -34,6 +34,7 @@ export type RootStackParamList = {
   DatingSetup: undefined;
   SwipeScreen: undefined;
   MatchDetail: { matchId: number };
+  DatingDebug: undefined; // ADD THIS LINE
 
   // Photo Message screens
   PhotoCamera: { recipientId?: number };

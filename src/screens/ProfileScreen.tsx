@@ -568,6 +568,15 @@ const ProfileScreen = () => {
       </ScrollView>
     </SafeAreaView>
   );
+  // Add this button somewhere in your ProfileScreen.tsx
+  <TouchableOpacity
+    onPress={() => navigation.navigate("Debug")}
+    className="bg-gray-800 rounded-lg py-3 px-4 mb-3"
+  >
+    <Text className="text-white text-center font-semibold">
+      🐛 Debug & Testing
+    </Text>
+  </TouchableOpacity>;
 };
 
 export default ProfileScreen;

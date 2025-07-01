@@ -1,4 +1,4 @@
-// src/components/dating/SwipeCards.tsx
+// src/components/dating/SwipeCards.tsx - EXACT ProfileScreen Layout + FIXED swiping + FIXED buttons
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -8,16 +8,18 @@ import {
   Animated,
   Dimensions,
   Alert,
-  PanResponder,
+  ScrollView,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { getPotentialMatches, swipeUser } from "@/api/dating";
-import { DatingProfile } from "@/api/dating";
+import { DatingProfile } from "@/types/dating";
+import { useSelector } from "react-redux";
+import { RootState } from "@/redux/store";
+import MatchCelebrationModal from "@/components/dating/MatchCelebrationModal";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
-const CARD_WIDTH = screenWidth * 0.9;
-const CARD_HEIGHT = screenHeight * 0.7;
-const SWIPE_THRESHOLD = screenWidth * 0.3;
+const CARD_WIDTH = screenWidth - 32;
+const CARD_HEIGHT = screenHeight * 0.72;
 
 interface SwipeCardsProps {
   onMatch: (matchData: any) => void;
@@ -27,14 +29,16 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
   const [profiles, setProfiles] = useState<DatingProfile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [swipeCount, setSwipeCount] = useState(0);
-  const [dailyLimit, setDailyLimit] = useState(50);
 
-  // Animation values
-  const position = useRef(new Animated.ValueXY()).current;
-  const rotate = useRef(new Animated.Value(0)).current;
-  const likeOpacity = useRef(new Animated.Value(0)).current;
-  const passOpacity = useRef(new Animated.Value(0)).current;
+  // Match celebration state
+  const [showMatchModal, setShowMatchModal] = useState(false);
+  const [matchData, setMatchData] = useState<any>(null);
+
+  // Get current user
+  const currentUser = useSelector((state: RootState) => state.user);
+
+  // Animation values only for card transitions
+  const cardOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     loadPotentialMatches();
@@ -43,10 +47,18 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
   const loadPotentialMatches = async () => {
     try {
       setLoading(true);
+      console.log("🔍 Loading potential matches...");
       const matches = await getPotentialMatches();
+      console.log("📊 API returned:", matches);
+      console.log("📊 Number of profiles:", matches?.length || 0);
+
+      if (matches && matches.length > 0) {
+        console.log("📊 First profile:", matches[0]);
+      }
+
       setProfiles(matches);
     } catch (error) {
-      console.error("Failed to load potential matches:", error);
+      console.error("❌ Error loading matches:", error);
       Alert.alert(
         "Error",
         "Failed to load potential matches. Please try again."
@@ -61,51 +73,34 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
 
     const currentProfile = profiles[currentIndex];
 
+    console.log(`🎯 ${direction} on ${currentProfile.user.username}`);
+
+    // Simple fade out animation
+    Animated.timing(cardOpacity, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start(() => {
+      console.log("✅ Moving to next card");
+      // Reset opacity and move to next card
+      cardOpacity.setValue(1);
+      setCurrentIndex((prev) => prev + 1);
+    });
+
     try {
-      // Animate card out
-      Animated.parallel([
-        Animated.timing(position, {
-          toValue: {
-            x: direction === "LIKE" ? screenWidth : -screenWidth,
-            y: 0,
-          },
-          duration: 300,
-          useNativeDriver: false,
-        }),
-        Animated.timing(rotate, {
-          toValue: direction === "LIKE" ? 1 : -1,
-          duration: 300,
-          useNativeDriver: false,
-        }),
-      ]).start(() => {
-        // Reset animation values
-        position.setValue({ x: 0, y: 0 });
-        rotate.setValue(0);
-        likeOpacity.setValue(0);
-        passOpacity.setValue(0);
-
-        // Move to next card
-        setCurrentIndex((prev) => prev + 1);
-      });
-
       // Call API
       const response = await swipeUser(currentProfile.user.id, direction);
 
-      // Update swipe count
-      setSwipeCount((prev) => prev + 1);
-
-      // Check for match
+      // Check for match - this is the key integration!
       if (response.matched && response.match) {
-        onMatch(response.match);
-      }
+        console.log("🎉 IT'S A MATCH!", response.match);
 
-      // Check daily limit
-      if (swipeCount >= dailyLimit - 1) {
-        Alert.alert(
-          "Daily Limit Reached",
-          "You've reached your daily swipe limit. Come back tomorrow or upgrade for unlimited swipes!",
-          [{ text: "OK" }]
-        );
+        // Set match data for celebration modal
+        setMatchData(response.match);
+        setShowMatchModal(true);
+
+        // Also call the original onMatch callback
+        onMatch(response.match);
       }
     } catch (error) {
       console.error("Failed to swipe:", error);
@@ -113,177 +108,258 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
     }
   };
 
-  // Pan responder for swipe gestures
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderMove: (event, gestureState) => {
-        position.setValue({ x: gestureState.dx, y: gestureState.dy });
-      },
-      onPanResponderRelease: (event, gestureState) => {
-        const { dx } = gestureState;
-
-        if (Math.abs(dx) > SWIPE_THRESHOLD) {
-          handleSwipe(dx > 0 ? "LIKE" : "PASS");
-        } else {
-          // Snap back to center
-          Animated.parallel([
-            Animated.spring(position, {
-              toValue: { x: 0, y: 0 },
-              useNativeDriver: false,
-            }),
-            Animated.spring(rotate, {
-              toValue: 0,
-              useNativeDriver: false,
-            }),
-          ]).start();
+  // Parse JSON fields safely
+  const parseJsonField = (field: any) => {
+    if (!field) return [];
+    if (Array.isArray(field)) {
+      return field.map((item) => {
+        try {
+          return typeof item === "string" ? JSON.parse(item) : item;
+        } catch {
+          return { question: item, answer: "" };
         }
-      },
-    })
-  ).current;
+      });
+    }
+    return [];
+  };
 
-  // Update like/pass opacity based on position
-  useEffect(() => {
-    const listenerId = position.x.addListener(({ value }) => {
-      const likeValue = value > 0 ? Math.min(value / SWIPE_THRESHOLD, 1) : 0;
-      const passValue =
-        value < 0 ? Math.min(Math.abs(value) / SWIPE_THRESHOLD, 1) : 0;
+  const renderProfileContent = (profile: DatingProfile) => {
+    const prompts = parseJsonField(profile.prompts);
 
-      likeOpacity.setValue(likeValue);
-      passOpacity.setValue(passValue);
+    return (
+      <ScrollView
+        className="flex-1"
+        showsVerticalScrollIndicator={false}
+        style={{ backgroundColor: "#f8f9fa" }}
+        scrollEnabled={true}
+      >
+        {/* Name Above First Photo - EXACTLY like ProfileScreen */}
+        <View className="mx-4 mt-4">
+          <Text className="text-3xl font-bold text-gray-800 mb-2">
+            {profile.user.displayName || profile.user.username}, {profile.age}
+          </Text>
+        </View>
 
-      const rotateValue = value / screenWidth;
-      rotate.setValue(rotateValue);
-    });
+        {/* First Photo Card - EXACTLY like ProfileScreen */}
+        <View className="mx-4 mt-4 bg-white rounded-3xl overflow-hidden shadow-lg">
+          <Image
+            source={{
+              uri:
+                (profile.photos && profile.photos[0]) ||
+                `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.user.username}`,
+            }}
+            className="w-full h-[450px]"
+            resizeMode="cover"
+          />
+        </View>
 
-    return () => position.x.removeListener(listenerId);
-  }, []);
+        {/* Bio Card - EXACTLY like ProfileScreen */}
+        <View className="mx-4 mt-4 bg-white rounded-3xl p-6 shadow-lg">
+          <Text className="text-gray-800 text-lg leading-6">{profile.bio}</Text>
+        </View>
+
+        {/* Combined Vitals, Lifestyle & Looking For Card - EXACTLY like ProfileScreen */}
+        <View className="mx-4 mt-4 bg-white rounded-3xl p-6 shadow-lg">
+          {/* Vitals Section (stacked, no bubbles) */}
+          <View className="space-y-3 mb-6">
+            {profile.height && (
+              <View className="flex-row items-center">
+                <MaterialIcons name="height" size={20} color="#666" />
+                <Text className="ml-3 text-gray-800 text-base">
+                  {profile.height}
+                </Text>
+              </View>
+            )}
+
+            {profile.location && (
+              <View className="flex-row items-center">
+                <MaterialIcons name="location-on" size={20} color="#666" />
+                <Text className="ml-3 text-gray-800 text-base">
+                  {profile.location}
+                </Text>
+              </View>
+            )}
+
+            {profile.job && (
+              <View className="flex-row items-center">
+                <MaterialIcons name="work" size={20} color="#666" />
+                <Text className="ml-3 text-gray-800 text-base">
+                  {profile.job}
+                </Text>
+              </View>
+            )}
+
+            {profile.hasChildren && (
+              <View className="flex-row items-center">
+                <MaterialIcons name="child-care" size={20} color="#666" />
+                <Text className="ml-3 text-gray-800 text-base">
+                  {profile.hasChildren}
+                </Text>
+              </View>
+            )}
+
+            {profile.wantChildren && (
+              <View className="flex-row items-center">
+                <MaterialIcons name="favorite" size={20} color="#666" />
+                <Text className="ml-3 text-gray-800 text-base">
+                  {profile.wantChildren}
+                </Text>
+              </View>
+            )}
+
+            {profile.drinking && (
+              <View className="flex-row items-center">
+                <Text className="text-gray-800 text-base mr-3">🍷</Text>
+                <Text className="text-gray-800 text-base">
+                  {profile.drinking}
+                </Text>
+              </View>
+            )}
+
+            {profile.smoking && profile.smoking !== "No" && (
+              <View className="flex-row items-center">
+                <Text className="text-gray-800 text-base mr-3">🚬</Text>
+                <Text className="text-gray-800 text-base">
+                  {profile.smoking}
+                </Text>
+              </View>
+            )}
+
+            {profile.drugs && profile.drugs !== "No" && (
+              <View className="flex-row items-center">
+                <MaterialIcons name="local-pharmacy" size={20} color="#666" />
+                <Text className="ml-3 text-gray-800 text-base">
+                  {profile.drugs} drugs
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Lifestyle Section (stacked, no bubbles) */}
+          {(profile.religion ||
+            profile.relationshipType ||
+            profile.lifestyle) && (
+            <View className="space-y-3 mb-6 pt-4 border-t border-gray-200">
+              {profile.religion && (
+                <View className="flex-row items-center">
+                  <MaterialIcons name="church" size={20} color="#666" />
+                  <Text className="ml-3 text-gray-800 text-base">
+                    {profile.religion}
+                  </Text>
+                </View>
+              )}
+
+              {profile.relationshipType && (
+                <View className="flex-row items-center">
+                  <MaterialIcons name="favorite" size={20} color="#666" />
+                  <Text className="ml-3 text-gray-800 text-base">
+                    {profile.relationshipType}
+                  </Text>
+                </View>
+              )}
+
+              {profile.lifestyle && (
+                <View className="flex-row items-center">
+                  <MaterialIcons name="people" size={20} color="#666" />
+                  <Text className="ml-3 text-gray-800 text-base">
+                    {profile.lifestyle}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Looking For Section */}
+          {profile.lookingFor && (
+            <View className="pt-4 border-t border-gray-200">
+              <Text className="text-gray-600 text-sm font-medium mb-2">
+                Looking for
+              </Text>
+              <Text className="text-gray-800 text-base leading-6">
+                {profile.lookingFor}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Additional Photos with Prompts Between - EXACTLY like ProfileScreen */}
+        {profile.photos &&
+          profile.photos.length > 1 &&
+          profile.photos.slice(1).map((photo: string, index: number) => (
+            <View key={`photo-section-${index}`}>
+              {/* Photo Card */}
+              <View className="mx-4 mt-4 bg-white rounded-3xl overflow-hidden shadow-lg">
+                <Image
+                  source={{ uri: photo }}
+                  className="w-full h-[450px]"
+                  resizeMode="cover"
+                />
+              </View>
+
+              {/* Prompt Card (if available) */}
+              {prompts && prompts[index] && prompts[index].question && (
+                <View className="mx-4 mt-4 bg-white rounded-3xl p-6 shadow-lg">
+                  <Text className="text-gray-600 text-sm font-medium mb-2">
+                    {prompts[index].question}
+                  </Text>
+                  <Text className="text-gray-800 text-lg leading-6">
+                    {prompts[index].answer}
+                  </Text>
+                </View>
+              )}
+            </View>
+          ))}
+
+        {/* Bottom spacing for buttons */}
+        <View className="h-32" />
+      </ScrollView>
+    );
+  };
 
   const renderCard = (profile: DatingProfile, index: number) => {
     if (index < currentIndex) return null;
 
     const isTopCard = index === currentIndex;
+    const cardPosition = index - currentIndex;
+
     const cardStyle = isTopCard
       ? {
-          transform: [
-            { translateX: position.x },
-            { translateY: position.y },
-            {
-              rotate: rotate.interpolate({
-                inputRange: [-1, 0, 1],
-                outputRange: ["-15deg", "0deg", "15deg"],
-              }),
-            },
-          ],
+          // Top card - simple opacity animation
+          opacity: cardOpacity,
+          zIndex: 1000,
         }
       : {
+          // Background cards - static positioning
           transform: [
-            { scale: 0.95 - (index - currentIndex) * 0.05 },
-            { translateY: (index - currentIndex) * 10 },
+            { scale: 1 - cardPosition * 0.05 },
+            { translateY: cardPosition * 8 },
           ],
+          zIndex: 1000 - cardPosition,
         };
 
     return (
       <Animated.View
-        key={profile.id}
-        {...(isTopCard ? panResponder.panHandlers : {})}
+        key={`${profile.id}-${index}`}
+        className="absolute"
         style={[
           {
             width: CARD_WIDTH,
             height: CARD_HEIGHT,
-            backgroundColor: "#1F2937",
-            borderRadius: 16,
-            position: "absolute",
+            left: 16,
+            top: 20,
+            backgroundColor: "#f8f9fa",
+            borderRadius: 24,
             shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.2,
+            shadowRadius: 16,
             elevation: 8,
           },
           cardStyle,
         ]}
       >
-        {/* Profile Image */}
-        <Image
-          source={{
-            uri:
-              profile.photos[0] ||
-              `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.user.username}`,
-          }}
-          style={{
-            width: "100%",
-            height: "70%",
-            borderTopLeftRadius: 16,
-            borderTopRightRadius: 16,
-          }}
-          resizeMode="cover"
-        />
-
-        {/* Like/Pass Overlays - Only show on top card */}
-        {isTopCard && (
-          <>
-            <Animated.View
-              style={{
-                position: "absolute",
-                top: 50,
-                right: 20,
-                backgroundColor: "green",
-                paddingHorizontal: 20,
-                paddingVertical: 10,
-                borderRadius: 20,
-                opacity: likeOpacity,
-              }}
-            >
-              <Text
-                style={{ color: "white", fontWeight: "bold", fontSize: 18 }}
-              >
-                LIKE
-              </Text>
-            </Animated.View>
-
-            <Animated.View
-              style={{
-                position: "absolute",
-                top: 50,
-                left: 20,
-                backgroundColor: "red",
-                paddingHorizontal: 20,
-                paddingVertical: 10,
-                borderRadius: 20,
-                opacity: passOpacity,
-              }}
-            >
-              <Text
-                style={{ color: "white", fontWeight: "bold", fontSize: 18 }}
-              >
-                PASS
-              </Text>
-            </Animated.View>
-          </>
-        )}
-
-        {/* Profile Info */}
-        <View style={{ padding: 16, height: "30%" }}>
-          <Text style={{ color: "white", fontSize: 24, fontWeight: "bold" }}>
-            {profile.user.displayName || profile.user.username}, {profile.age}
-          </Text>
-
-          <View
-            style={{ flexDirection: "row", alignItems: "center", marginTop: 4 }}
-          >
-            <MaterialIcons name="location-on" size={16} color="#9CA3AF" />
-            <Text style={{ color: "#9CA3AF", marginLeft: 4 }}>
-              {profile.location}
-            </Text>
-          </View>
-
-          <Text
-            style={{ color: "#D1D5DB", marginTop: 8, fontSize: 14 }}
-            numberOfLines={2}
-          >
-            {profile.bio}
-          </Text>
-        </View>
+        {/* Profile Content - Your EXACT ProfileScreen Layout */}
+        {renderProfileContent(profile)}
       </Animated.View>
     );
   };
@@ -291,7 +367,10 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center">
-        <Text className="text-white text-lg">Finding amazing people...</Text>
+        <MaterialIcons name="favorite" size={40} color="#E91E63" />
+        <Text className="text-white text-lg mt-4">
+          Finding amazing people...
+        </Text>
       </View>
     );
   }
@@ -317,35 +396,73 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
   }
 
   return (
-    <View className="flex-1 items-center justify-center">
-      {/* Cards Stack */}
-      <View style={{ width: CARD_WIDTH, height: CARD_HEIGHT }}>
+    <View className="flex-1 bg-black">
+      {/* Cards Container */}
+      <View style={{ flex: 1, position: "relative" }}>
         {profiles
           .slice(currentIndex, currentIndex + 3)
-          .map((profile, index) => renderCard(profile, currentIndex + index))}
+          .map((profile, stackIndex) =>
+            renderCard(profile, currentIndex + stackIndex)
+          )}
       </View>
 
-      {/* Action Buttons */}
-      <View className="flex-row items-center justify-center mt-8 px-8">
+      {/* BUTTONS - Positioned even lower on screen */}
+      <View
+        style={{
+          position: "absolute",
+          bottom: 15,
+          left: 0,
+          right: 0,
+          flexDirection: "row",
+          justifyContent: "center",
+          alignItems: "center",
+          paddingHorizontal: 32,
+          zIndex: 2000,
+        }}
+      >
+        {/* RED X BUTTON */}
         <TouchableOpacity
           onPress={() => handleSwipe("PASS")}
-          className="w-16 h-16 bg-gray-700 rounded-full items-center justify-center mr-8"
+          style={{
+            width: 70,
+            height: 70,
+            borderRadius: 35,
+            backgroundColor: "#fd5068",
+            justifyContent: "center",
+            alignItems: "center",
+            marginRight: 50,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 8,
+          }}
+          activeOpacity={0.8}
         >
-          <MaterialIcons name="close" size={28} color="white" />
+          <MaterialIcons name="close" size={35} color="white" />
         </TouchableOpacity>
 
+        {/* GREEN HEART BUTTON */}
         <TouchableOpacity
           onPress={() => handleSwipe("LIKE")}
-          className="w-16 h-16 bg-pink-500 rounded-full items-center justify-center"
+          style={{
+            width: 70,
+            height: 70,
+            borderRadius: 35,
+            backgroundColor: "#4ade80",
+            justifyContent: "center",
+            alignItems: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 8,
+          }}
+          activeOpacity={0.8}
         >
-          <MaterialIcons name="favorite" size={28} color="white" />
+          <MaterialIcons name="favorite" size={35} color="white" />
         </TouchableOpacity>
       </View>
-
-      {/* Swipe Counter */}
-      <Text className="text-gray-400 text-sm mt-4">
-        {swipeCount}/{dailyLimit} swipes today
-      </Text>
     </View>
   );
 };

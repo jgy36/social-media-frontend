@@ -62,6 +62,7 @@ import DatingScreen from "./src/screens/DatingScreen";
 import DatingSetupScreen from "./src/screens/dating/DatingSetupScreen";
 import SwipeScreen from "./src/screens/dating/SwipeScreen";
 import MatchDetailScreen from "./src/screens/dating/MatchDetailScreen";
+import DatingDebugScreen from "./src/screens/dating/DatingDebugScreen";
 
 // Photo Message screens
 import PhotoCameraScreen from "./src/screens/messages/PhotoCameraScreen";
@@ -169,6 +170,17 @@ function MainTabNavigator() {
         name="Profile"
         component={ProfileScreen}
         options={{ tabBarLabel: "Profile" }}
+      />
+      {/* ⚠️ ADD THIS TEMPORARY DEBUG TAB */}
+      <Tab.Screen
+        name="Debug"
+        component={DebugScreen}
+        options={{
+          tabBarLabel: "Debug",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="bug-report" size={size} color={color} />
+          ),
+        }}
       />
     </Tab.Navigator>
   );
@@ -331,6 +343,7 @@ function AppNavigator() {
           // Authenticated screens
           <>
             {/* Main Tab Navigator */}
+
             <Stack.Screen name="MainTabs" component={MainTabNavigator} />
 
             {/* Stack screens that overlay the tabs */}
@@ -375,6 +388,13 @@ function AppNavigator() {
             />
             <Stack.Screen name="SwipeScreen" component={SwipeScreen} />
             <Stack.Screen name="MatchDetail" component={MatchDetailScreen} />
+            <Stack.Screen
+              name="DatingDebug"
+              component={DatingDebugScreen}
+              options={{
+                headerShown: false, // We handle header in the component
+              }}
+            />
 
             {/* Photo Message screens */}
             <Stack.Screen

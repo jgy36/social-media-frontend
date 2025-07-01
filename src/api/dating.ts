@@ -239,3 +239,17 @@ export const updatePhotoOrder = async (photoUrls: string[]): Promise<void> => {
     });
   }, "Failed to update photo order");
 };
+
+/**
+ * Mark a match as "seen" (no longer new)
+ */
+export const markMatchAsSeen = async (
+  matchId: number
+): Promise<{ success: boolean }> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.post<{ success: boolean }>(
+      `/dating/matches/${matchId}/mark-seen`
+    );
+    return response.data;
+  }, "Failed to mark match as seen");
+};

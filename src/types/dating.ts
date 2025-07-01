@@ -1,4 +1,63 @@
 // src/types/dating.ts - Updated to match API response structure
+
+// ADD these interfaces to the top of your src/api/dating.ts file:
+export interface CreateDatingProfileRequest {
+  bio: string;
+  age: number;
+  location: string;
+  height?: string;
+  job?: string;
+  religion?: string;
+  relationshipType?: string;
+  lifestyle?: string;
+  photos: string[];
+  genderPreference: string;
+  minAge: number;
+  maxAge: number;
+  maxDistance: number;
+  prompts?: Array<{
+    question: string;
+    answer: string;
+  }>;
+  hasChildren?: string;
+  wantChildren?: string;
+  drinking?: string;
+  smoking?: string;
+  drugs?: string;
+  lookingFor?: string;
+  interests?: string[];
+  virtues?: Array<{
+    category: string;
+    value: string;
+  }>;
+}
+
+export interface SwipeResponse {
+  matched: boolean;
+  match?: Match;
+}
+
+export interface Match {
+  id: number;
+  user1: {
+    id: number;
+    username: string;
+    displayName: string;
+    profileImageUrl?: string;
+  };
+  user2: {
+    id: number;
+    username: string;
+    displayName: string;
+    profileImageUrl?: string;
+  };
+  matchedAt: string;
+  isActive: boolean;
+}
+
+// Import DatingProfile from your existing types
+export { DatingProfile } from "@/types/dating";
+
 export interface DatingProfile {
   id: number;
   user: {
@@ -53,7 +112,49 @@ export interface DatingProfile {
   }>;
 }
 
-// Rest of interfaces...
+export type SwipeDirection = "LIKE" | "PASS";
+
+// ADD these types to your existing src/api/dating.ts file
+
+export interface CreateDatingProfileRequest {
+  bio: string;
+  age: number;
+  location: string;
+  height?: string;
+  job?: string;
+  religion?: string;
+  relationshipType?: string;
+  lifestyle?: string;
+  photos: string[];
+  genderPreference: string;
+  minAge: number;
+  maxAge: number;
+  maxDistance: number;
+  prompts?: Array<{
+    question: string;
+    answer: string;
+  }>;
+
+  // Vitals & Vices
+  hasChildren?: string;
+  wantChildren?: string;
+  drinking?: string;
+  smoking?: string;
+  drugs?: string;
+
+  // Additional fields
+  lookingFor?: string;
+  interests?: string[];
+  virtues?: Array<{
+    category: string;
+    value: string;
+  }>;
+}
+
+export interface SwipeResponse {
+  matched: boolean;
+  match?: Match;
+}
 
 export interface Match {
   id: number;
@@ -72,5 +173,3 @@ export interface Match {
   matchedAt: string;
   isActive: boolean;
 }
-
-export type SwipeDirection = "LIKE" | "PASS";
