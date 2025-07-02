@@ -1,4 +1,4 @@
-// src/screens/messages/SnapMessagesTab.tsx - Clean rebuild with solid icons
+// src/screens/messages/SnapMessagesTab.tsx
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -31,10 +31,26 @@ const SnapMessagesTab = () => {
     try {
       console.log("📱 Loading snap conversations...");
       const data = await getEnhancedPhotoMessageConversations();
-      console.log("📊 Snap conversations:", data);
+      console.log(
+        "📊 Snap conversations loaded:",
+        data.length,
+        "conversations"
+      );
+
+      // Log each conversation's lastMessage data for debugging
+      data.forEach((conv, index) => {
+        console.log(`📄 Conversation ${index + 1} (${conv.username}):`, {
+          userId: conv.userId,
+          unreadCount: conv.unreadCount,
+          isMatch: conv.isMatch,
+          isNewMatch: conv.isNewMatch,
+          lastMessage: conv.lastMessage,
+        });
+      });
+
       setConversations(data);
     } catch (error) {
-      console.error("Failed to load conversations:", error);
+      console.error("❌ Failed to load conversations:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -87,14 +103,19 @@ const SnapMessagesTab = () => {
     return date.toLocaleDateString();
   };
 
-  // Clean status function - ALWAYS returns solid icons for testing
+  // Enhanced status function using real API data
   const getConversationStatus = (conversation: EnhancedPhotoConversation) => {
-    console.log(
-      "✅ NEW getConversationStatus called for:",
-      conversation.userId
-    );
+    console.log(`🔍 Getting status for ${conversation.username}:`, {
+      userId: conversation.userId,
+      currentUserId: currentUser.id,
+      unreadCount: conversation.unreadCount,
+      isNewMatch: conversation.isNewMatch,
+      lastMessage: conversation.lastMessage,
+    });
 
+    // Priority 1: New matches (show heart icon)
     if (conversation.isNewMatch) {
+      console.log("💖 Status: New Match");
       return {
         type: "newMatch",
         text: "New Match!",
@@ -103,50 +124,108 @@ const SnapMessagesTab = () => {
       };
     }
 
+    // Priority 2: Unread messages (show solid red square)
     if (conversation.unreadCount > 0) {
+      console.log("🔴 Status: Unread Snap");
       return {
         type: "receivedSnap",
         text: "New Snap",
         color: "#FF4757",
         showSnapIcon: true,
-        snapOpened: false, // Solid square
+        snapOpened: false, // Solid square for unread
       };
     }
 
-    // Mix of solid and hollow snaps for testing
+    // Priority 3: Handle conversations with message history
+    if (conversation.lastMessage) {
+      const isSentByCurrentUser =
+        conversation.lastMessage.senderId === currentUser.id;
+      const isMessageViewed = conversation.lastMessage.isViewed;
+
+      console.log(
+        `📝 Status: Has last message - Sent by current user: ${isSentByCurrentUser}, Viewed: ${isMessageViewed}`
+      );
+
+      if (isSentByCurrentUser) {
+        // Current user sent the last message - show arrows
+        console.log(
+          `📤 Status: Sent snap - ${
+            isMessageViewed ? "Hollow" : "Solid"
+          } arrows`
+        );
+        return {
+          type: "sentSnap",
+          text: formatDetailedTime(conversation.lastMessageAt),
+          color: "#8E8E93",
+          showSnapIcon: true,
+          snapOpened: isMessageViewed, // TRUE = hollow arrows, FALSE = solid arrows
+        };
+      } else {
+        // Other user sent the last message and it was viewed (since unreadCount = 0)
+        console.log(
+          "📥 Status: Received snap (already viewed) - Hollow square"
+        );
+        return {
+          type: "receivedSnap",
+          text: formatDetailedTime(conversation.lastMessageAt),
+          color: "#8E8E93",
+          showSnapIcon: true,
+          snapOpened: true, // Hollow square for viewed received snap
+        };
+      }
+    }
+
+    // Priority 4: Match with no messages yet
+    if (conversation.isMatch) {
+      console.log("💕 Status: Match (no messages)");
+      return {
+        type: "match",
+        text: "Say hello! 👋",
+        color: "#FF6B9D",
+        showSnapIcon: false,
+      };
+    }
+
+    // Fallback: No activity
+    console.log("⚪ Status: No activity");
     return {
-      type: "sentSnap",
-      text: formatDetailedTime(conversation.lastMessageAt),
+      type: "noActivity",
+      text: "Start a conversation",
       color: "#8E8E93",
-      showSnapIcon: true,
-      snapOpened: conversation.userId % 3 === 0, // Every 3rd snap is opened (hollow)
+      showSnapIcon: false,
     };
   };
 
   // Clean icon rendering function
   const renderSnapIcon = (status: any) => {
     if (!status.showSnapIcon) {
-      return (
-        <MaterialIcons
-          name="favorite"
-          size={14}
-          color={status.color}
-          style={{ marginRight: 4 }}
-        />
-      );
+      if (status.type === "newMatch" || status.type === "match") {
+        return (
+          <MaterialIcons
+            name="favorite"
+            size={14}
+            color={status.color}
+            style={{ marginRight: 4 }}
+          />
+        );
+      }
+      return null;
     }
 
     if (status.type === "receivedSnap") {
       // Square for received snaps
+      console.log(
+        `🟦 Rendering received snap square - opened: ${status.snapOpened}`
+      );
       return (
         <View
           style={{
             width: 14,
             height: 14,
             borderRadius: 2,
-            backgroundColor: status.snapOpened ? "transparent" : "#FFFFFF",
-            borderWidth: 1.5,
-            borderColor: "#FFFFFF",
+            backgroundColor: status.snapOpened ? "transparent" : "#FF4757",
+            borderWidth: status.snapOpened ? 1.5 : 0,
+            borderColor: status.snapOpened ? "#FFFFFF" : "transparent",
             marginRight: 8,
           }}
         />
@@ -156,8 +235,7 @@ const SnapMessagesTab = () => {
     if (status.type === "sentSnap") {
       // Triple chevron arrows for sent snaps
       console.log(
-        "🎨 Rendering sent snap icon - snapOpened:",
-        status.snapOpened
+        `🎯 Rendering sent snap arrows - opened: ${status.snapOpened}`
       );
 
       const renderSingleChevron = () => (
@@ -171,13 +249,13 @@ const SnapMessagesTab = () => {
             position: "relative",
           }}
         >
-          {/* White chevron - same for both solid and hollow */}
+          {/* White chevron outline */}
           <View
             style={{
-              width: 14,
-              height: 14,
-              borderRightWidth: 8,
-              borderTopWidth: 8,
+              width: 12,
+              height: 12,
+              borderRightWidth: 6,
+              borderTopWidth: 6,
               borderRightColor: "#FFFFFF",
               borderTopColor: "#FFFFFF",
               transform: [{ rotate: "45deg" }],
@@ -185,15 +263,15 @@ const SnapMessagesTab = () => {
             }}
           />
 
-          {/* ONLY add black center if snap is opened */}
+          {/* Black center if snap is opened (hollow) */}
           {status.snapOpened && (
             <View
               style={{
                 position: "absolute",
-                width: 10,
-                height: 10,
-                borderRightWidth: 4,
-                borderTopWidth: 4,
+                width: 8,
+                height: 8,
+                borderRightWidth: 3,
+                borderTopWidth: 3,
                 borderRightColor: "#000000",
                 borderTopColor: "#000000",
                 transform: [{ rotate: "45deg" }],
@@ -231,7 +309,6 @@ const SnapMessagesTab = () => {
     item: EnhancedPhotoConversation;
   }) => {
     const status = getConversationStatus(item);
-    console.log("📝 NEW Status:", JSON.stringify(status, null, 2));
 
     return (
       <TouchableOpacity
@@ -326,7 +403,9 @@ const SnapMessagesTab = () => {
               alignItems: "center",
             }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
+            >
               {renderSnapIcon(status)}
 
               <Text

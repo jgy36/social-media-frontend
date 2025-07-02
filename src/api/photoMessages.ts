@@ -66,6 +66,24 @@ export interface ViewPhotoMessageResponse {
   error?: string;
 }
 
+// Enhanced conversation type that matches the backend response
+export interface EnhancedPhotoConversation {
+  userId: number;
+  username: string;
+  displayName: string;
+  profileImageUrl?: string;
+  unreadCount: number;
+  lastMessageAt: string;
+  isMatch: boolean;
+  isNewMatch: boolean;
+  matchedAt?: string;
+  // Last message details for solid/hollow icon logic
+  lastMessage?: {
+    senderId: number;
+    isViewed: boolean;
+  };
+}
+
 /**
  * Send a photo message
  */
@@ -169,7 +187,7 @@ export const getPhotoMessageMetadata = async (
 };
 
 /**
- * Get all active photo message conversations
+ * Get basic photo message conversations (legacy)
  */
 export const getPhotoMessageConversations = async (): Promise<
   {
@@ -187,28 +205,19 @@ export const getPhotoMessageConversations = async (): Promise<
   }, "Failed to get photo message conversations");
 };
 
-export interface EnhancedPhotoConversation {
-  userId: number;
-  username: string;
-  displayName: string;
-  profileImageUrl?: string;
-  unreadCount: number;
-  lastMessageAt: string;
-  isMatch: boolean;
-  isNewMatch: boolean;
-  matchedAt?: string;
-}
-
 /**
- * Get all photo message conversations including new dating matches
+ * Get all photo message conversations including new dating matches and last message data
+ * This is the main function used by SnapMessagesTab
  */
 export const getEnhancedPhotoMessageConversations = async (): Promise<
   EnhancedPhotoConversation[]
 > => {
   return safeApiCall(async () => {
+    console.log("🔄 Calling enhanced photo message conversations API...");
     const response = await apiClient.get<EnhancedPhotoConversation[]>(
-      "/photo-messages/conversations"
+      "/photo-messages/conversations/enhanced"
     );
+    console.log("📊 API Response:", response.data);
     return response.data;
   }, "Failed to get enhanced photo message conversations");
 };
