@@ -1,11 +1,6 @@
-// src/api/auth.ts - React Native version
+// src/api/auth.ts - Updated with birthday registration
 import { apiClient, safeApiCall } from "./apiClient";
-import {
-  LoginRequest,
-  RegisterRequest,
-  AuthResponse,
-  ApiResponse,
-} from "./types";
+import { LoginRequest, AuthResponse, ApiResponse } from "./types";
 import {
   setToken,
   setUserData,
@@ -15,6 +10,15 @@ import {
   getUserId,
 } from "@/utils/tokenUtils";
 import { getToken } from "@/utils/tokenUtils";
+
+// Updated registration interface to include birthday
+export interface RegisterRequest {
+  username: string;
+  email: string;
+  password: string;
+  displayName: string;
+  dateOfBirth: string; // YYYY-MM-DD format
+}
 
 /**
  * Login a user - React Native version
@@ -63,7 +67,10 @@ export const login = async (
     } catch (error: any) {
       // Handle specific error cases
       if (error.response?.data?.errorCode === "EMAIL_NOT_VERIFIED") {
-        throw new Error(error.response.data.message || "Please verify your email before logging in");
+        throw new Error(
+          error.response.data.message ||
+            "Please verify your email before logging in"
+        );
       }
       throw error;
     }
@@ -71,7 +78,7 @@ export const login = async (
 };
 
 /**
- * Register a new user - React Native version
+ * Register a new user with birthday - React Native version
  */
 export const register = async (
   userData: RegisterRequest
@@ -98,7 +105,8 @@ export const register = async (
           id: userId,
           username: user.username,
           email: user.email,
-          displayName: user.displayName || userData.displayName || userData.username,
+          displayName:
+            user.displayName || userData.displayName || userData.username,
           bio: user.bio,
           profileImageUrl: user.profileImageUrl,
         });
@@ -162,11 +170,11 @@ export const checkAuthStatus = async (): Promise<boolean> => {
     // Check if a token exists first
     const token = await getToken();
     if (!token) {
-      console.log('No token found, skipping auth check');
+      console.log("No token found, skipping auth check");
       await setAuthenticated(false);
       return false;
     }
-    
+
     // Only make API call if token exists
     const response = await apiClient.get<{
       id?: number;
@@ -175,6 +183,9 @@ export const checkAuthStatus = async (): Promise<boolean> => {
       displayName?: string;
       bio?: string;
       profileImageUrl?: string;
+      age?: number; // NEW: Include age from birthday
+      ageConfirmed?: boolean; // NEW: Include age confirmation status
+      eligibleForDating?: boolean; // NEW: Include dating eligibility
     }>("/users/me");
 
     // If successful, update current user info
@@ -182,7 +193,7 @@ export const checkAuthStatus = async (): Promise<boolean> => {
       // Mark as authenticated
       await setAuthenticated(true);
 
-      // Store user data
+      // Store user data including new age-related fields
       await setUserData({
         id: response.data.id.toString(),
         username: response.data.username || "",
@@ -190,6 +201,9 @@ export const checkAuthStatus = async (): Promise<boolean> => {
         displayName: response.data.displayName || undefined,
         bio: response.data.bio || undefined,
         profileImageUrl: response.data.profileImageUrl || undefined,
+        age: response.data.age, // NEW: Store calculated age
+        ageConfirmed: response.data.ageConfirmed, // NEW: Store age confirmation status
+        eligibleForDating: response.data.eligibleForDating, // NEW: Store dating eligibility
       });
 
       return true;
@@ -205,7 +219,7 @@ export const checkAuthStatus = async (): Promise<boolean> => {
 
 /**
  * Get current user information - React Native version
- * Returns an object with user data from AsyncStorage
+ * Returns an object with user data from AsyncStorage including age info
  */
 export const getCurrentUserInfo = async (): Promise<{
   userId: string | null;
@@ -214,6 +228,9 @@ export const getCurrentUserInfo = async (): Promise<{
   displayName: string | null;
   bio: string | null;
   profileImageUrl: string | null;
+  age: number | null; // NEW: Include age
+  ageConfirmed: boolean | null; // NEW: Include age confirmation
+  eligibleForDating: boolean | null; // NEW: Include dating eligibility
 }> => {
   const userData = await getUserData();
 
@@ -224,6 +241,9 @@ export const getCurrentUserInfo = async (): Promise<{
     displayName: userData.displayName || null,
     bio: userData.bio || null,
     profileImageUrl: userData.profileImageUrl || null,
+    age: userData.age || null, // NEW
+    ageConfirmed: userData.ageConfirmed || null, // NEW
+    eligibleForDating: userData.eligibleForDating || null, // NEW
   };
 };
 
@@ -375,4 +395,75 @@ export const checkUsernameAvailability = async (
       message: "Error checking username availability. Please try again.",
     };
   }
+};
+
+// NEW: Verify email functions for birthday registration
+/**
+ * Verify email with code
+ */
+export const verifyEmailCode = async (
+  code: string
+): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+}> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.post("/auth/verify-email", { code });
+    return response.data;
+  }, "Failed to verify email");
+};
+
+/**
+ * Resend verification email
+ */
+export const resendVerificationEmail = async (
+  email: string
+): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+}> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.post("/auth/resend-verification", {
+      email,
+    });
+    return response.data;
+  }, "Failed to resend verification email");
+};
+
+/**
+ * Request password reset
+ */
+export const requestPasswordReset = async (
+  email: string
+): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+}> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.post("/auth/forgot-password", { email });
+    return response.data;
+  }, "Failed to request password reset");
+};
+
+/**
+ * Reset password with token
+ */
+export const resetPassword = async (
+  token: string,
+  newPassword: string
+): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+}> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.post("/auth/reset-password", {
+      token,
+      newPassword,
+    });
+    return response.data;
+  }, "Failed to reset password");
 };

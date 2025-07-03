@@ -1,4 +1,4 @@
-// src/screens/dating/DatingSetupScreen.tsx - Fixed version
+// src/screens/dating/DatingSetupScreen.tsx - Updated with gender selection
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -23,22 +23,16 @@ import {
 } from "@/api/dating";
 import * as ImagePicker from "expo-image-picker";
 import PromptCard from "@/components/dating/PromptCard";
-import Slider from "@react-native-community/slider";
 
 interface DatingProfileData {
   bio: string;
-  age: number;
   location: string;
   height: string;
-  job: string; // ADD this
+  job: string;
   religion: string;
   relationshipType: string;
   lifestyle: string;
   photos: string[];
-  genderPreference: string;
-  minAge: number;
-  maxAge: number;
-  maxDistance: number;
   prompts: Array<{
     question: string;
     answer: string;
@@ -51,6 +45,8 @@ interface DatingProfileData {
   lookingFor: string;
   interests: string[];
   virtues: Array<{ category: string; value: string }>;
+  // NEW: Add gender selection
+  gender: string;
 }
 
 const DatingSetupScreen = () => {
@@ -59,25 +55,18 @@ const DatingSetupScreen = () => {
 
   const [profile, setProfile] = useState<DatingProfileData>({
     bio: "",
-    age: 25,
     location: "",
     height: "",
-    job: "", // ADD this
+    job: "",
     religion: "",
     relationshipType: "",
     lifestyle: "",
-    photos: ["", "", "", "", "", ""], // 6 photo slots
-    genderPreference: "Everyone",
-    minAge: 18,
-    maxAge: 35,
-    maxDistance: 25,
+    photos: ["", "", "", "", "", ""],
     prompts: [
       { question: "", answer: "" },
       { question: "", answer: "" },
       { question: "", answer: "" },
     ],
-
-    // MAKE SURE THESE ARE IN YOUR INITIAL STATE:
     hasChildren: "",
     wantChildren: "",
     drinking: "",
@@ -86,6 +75,8 @@ const DatingSetupScreen = () => {
     lookingFor: "",
     interests: [],
     virtues: [],
+    // NEW: Initialize gender
+    gender: "",
   });
 
   const [showPromptSelector, setShowPromptSelector] = useState<number | null>(
@@ -94,6 +85,14 @@ const DatingSetupScreen = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState<number | null>(null);
+
+  // Gender options
+  const genderOptions = [
+    { value: "MAN", label: "Man" },
+    { value: "WOMAN", label: "Woman" },
+    { value: "NON_BINARY", label: "Non-binary" },
+    { value: "OTHER", label: "Other" },
+  ];
 
   const availablePrompts = [
     "I want someone who...",
@@ -176,6 +175,7 @@ const DatingSetupScreen = () => {
     "Atheist",
     "Other",
   ];
+
   const relationshipOptions = [
     "Long-term relationship",
     "Short-term relationship",
@@ -183,6 +183,7 @@ const DatingSetupScreen = () => {
     "New friends",
     "Something casual",
   ];
+
   const lifestyleOptions = [
     "Monogamy",
     "Non-monogamy",
@@ -216,13 +217,11 @@ const DatingSetupScreen = () => {
       if (existingProfile) {
         console.log("✅ Profile exists, processing data...");
 
-        // FIXED: Safely handle photos array - take first 6 photos and pad with empty strings
         const photos = existingProfile.photos || [];
         const photosArray = Array(6)
           .fill("")
           .map((_, index) => photos[index] || "");
 
-        // Ensure prompts are properly initialized
         const promptsArray = existingProfile.prompts || [];
         const normalizedPrompts = Array(3)
           .fill(null)
@@ -230,26 +229,16 @@ const DatingSetupScreen = () => {
             (_, index) => promptsArray[index] || { question: "", answer: "" }
           );
 
-        console.log("📸 Photos being set:", photosArray);
-        console.log("💭 Prompts being set:", normalizedPrompts);
-
         setProfile({
           bio: existingProfile.bio || "",
-          age: existingProfile.age || 25,
           location: existingProfile.location || "",
           height: existingProfile.height || "",
-          job: existingProfile.job || "", // ADD this
+          job: existingProfile.job || "",
           religion: existingProfile.religion || "",
           relationshipType: existingProfile.relationshipType || "",
           lifestyle: existingProfile.lifestyle || "",
           photos: photosArray,
-          genderPreference: existingProfile.genderPreference || "Everyone",
-          minAge: existingProfile.minAge || 18,
-          maxAge: existingProfile.maxAge || 35,
-          maxDistance: existingProfile.maxDistance || 25,
           prompts: normalizedPrompts,
-
-          // ADD THESE MISSING VITALS & VICES FIELDS:
           hasChildren: existingProfile.hasChildren || "",
           wantChildren: existingProfile.wantChildren || "",
           drinking: existingProfile.drinking || "",
@@ -258,14 +247,12 @@ const DatingSetupScreen = () => {
           lookingFor: existingProfile.lookingFor || "",
           interests: existingProfile.interests || [],
           virtues: existingProfile.virtues || [],
+          // NEW: Load gender
+          gender: existingProfile.gender || "",
         });
-        console.log("✅ Profile state updated successfully");
-      } else {
-        console.log("❌ No profile data received from API");
       }
     } catch (error) {
       console.error("❌ Error loading profile:", error);
-      console.log("🆕 No existing profile found, starting fresh");
     } finally {
       setLoading(false);
     }
@@ -278,11 +265,10 @@ const DatingSetupScreen = () => {
     }
 
     try {
-      // FIXED: Correct ImagePicker usage
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [2, 3], // ✅ Taller aspect ratio (2:3 instead of 3:4)
+        aspect: [2, 3],
         quality: 0.8,
       });
 
@@ -294,7 +280,6 @@ const DatingSetupScreen = () => {
           const newPhotos = [...profile.photos];
           newPhotos[index] = photoUrl;
           setProfile({ ...profile, photos: newPhotos });
-          console.log("📸 Photo updated at index", index, ":", photoUrl);
         } catch (error) {
           console.error("Upload error:", error);
           Alert.alert(
@@ -334,6 +319,7 @@ const DatingSetupScreen = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Validation
       if (!profile.bio.trim()) {
         Alert.alert(
           "Missing Information",
@@ -355,11 +341,9 @@ const DatingSetupScreen = () => {
         return;
       }
 
-      if (profile.age < 18 || profile.age > 100) {
-        Alert.alert(
-          "Invalid Age",
-          "Please enter a valid age between 18 and 100."
-        );
+      // NEW: Validate gender selection
+      if (!profile.gender) {
+        Alert.alert("Missing Information", "Please select your gender.");
         return;
       }
 
@@ -390,9 +374,6 @@ const DatingSetupScreen = () => {
       setSaving(false);
     }
   };
-
-  // Rest of component remains the same...
-  // (SelectionButton, PhotoUploadSlot, render, etc.)
 
   const SelectionButton = ({
     options,
@@ -430,6 +411,40 @@ const DatingSetupScreen = () => {
     </View>
   );
 
+  // NEW: Gender Selection Component
+  const GenderSelection = () => (
+    <View className="mb-4">
+      <Text className="text-sm font-medium text-gray-300 mb-2">I am a *</Text>
+      <View className="flex-row flex-wrap gap-2">
+        {genderOptions.map((option) => (
+          <TouchableOpacity
+            key={option.value}
+            onPress={() => setProfile({ ...profile, gender: option.value })}
+            className="px-4 py-3 rounded-xl border flex-1 min-w-[45%]"
+            style={{
+              backgroundColor:
+                profile.gender === option.value ? "#FF6B9D" : "transparent",
+              borderColor:
+                profile.gender === option.value ? "#FF6B9D" : "#6b7280",
+            }}
+          >
+            <Text
+              className="text-sm text-center font-medium"
+              style={{
+                color: profile.gender === option.value ? "#FFFFFF" : "#d1d5db",
+              }}
+            >
+              {option.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Text className="text-xs text-gray-500 mt-1">
+        This helps us show you to the right people
+      </Text>
+    </View>
+  );
+
   const PhotoUploadSlot = ({
     photo,
     onPhotoSelect,
@@ -450,7 +465,6 @@ const DatingSetupScreen = () => {
         large ? "h-[450px]" : "w-full h-full"
       } bg-gray-800 rounded-3xl border-2 border-dashed border-gray-600 items-center justify-center relative overflow-hidden`}
     >
-      {/* Rest of the component stays the same */}
       {isUploading ? (
         <View className="items-center">
           <ActivityIndicator size="large" color="#e5e7eb" />
@@ -511,6 +525,18 @@ const DatingSetupScreen = () => {
     );
   }
 
+  // Calculate progress - now includes gender
+  const getProgress = () => {
+    let progress = 0;
+    if (profile.photos.filter((p) => p).length > 0) progress += 16;
+    if (profile.bio) progress += 16;
+    if (profile.location) progress += 16;
+    if (profile.gender) progress += 16; // NEW: Add gender to progress
+    if (profile.height) progress += 16;
+    if (user?.age) progress += 16; // NEW: Age from birthday
+    return Math.min(progress, 100);
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-black">
       {/* Header */}
@@ -552,454 +578,374 @@ const DatingSetupScreen = () => {
           <View className="w-full bg-gray-700 rounded-full h-2">
             <View
               className="bg-green-500 h-2 rounded-full"
-              style={{
-                width: `${
-                  (profile.photos.filter((p) => p).length > 0 ? 20 : 0) +
-                  (profile.bio ? 20 : 0) +
-                  (profile.location ? 20 : 0) +
-                  (profile.age >= 18 ? 20 : 0) +
-                  (profile.height ? 20 : 0)
-                }%`,
-              }}
+              style={{ width: `${getProgress()}%` }}
             />
           </View>
         </View>
-        {/* Main Photo */}
-        <PhotoUploadSlot
-          photo={profile.photos[0]}
-          onPhotoSelect={() => handlePhotoSelect(0)}
-          onRemovePhoto={() => handleRemovePhoto(0)}
-          index={0}
-          large={true}
-          isUploading={uploadingPhoto === 0}
-        />
-        {/* Basic Info Card */}
-        <View className="bg-gray-900 rounded-3xl p-6 mb-6 border border-gray-800">
-          <Text className="text-white text-lg font-semibold mb-4">
-            About You
-          </Text>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-300 mb-2">
-              Bio *
+        {/* Age Verification Notice */}
+        {user?.age && user.age < 18 && (
+          <View className="bg-yellow-600 rounded-xl p-4 mb-6">
+            <Text className="text-white font-semibold mb-2">
+              Age Restriction
             </Text>
-            <TextInput
-              value={profile.bio}
-              onChangeText={(text) => setProfile({ ...profile, bio: text })}
-              placeholder="Write a short bio about yourself..."
-              placeholderTextColor="#6b7280"
-              className="p-4 border border-gray-600 rounded-xl text-white bg-gray-800"
-              multiline
-              numberOfLines={3}
-              maxLength={500}
+            <Text className="text-white">
+              You must be 18 or older to create a dating profile. You can still
+              use other app features.
+            </Text>
+          </View>
+        )}
+
+        {/* Show dating profile form only if 18+ */}
+        {(!user?.age || user.age >= 18) && (
+          <>
+            {/* Main Photo */}
+            <PhotoUploadSlot
+              photo={profile.photos[0]}
+              onPhotoSelect={() => handlePhotoSelect(0)}
+              onRemovePhoto={() => handleRemovePhoto(0)}
+              index={0}
+              large={true}
+              isUploading={uploadingPhoto === 0}
             />
-            <View className="flex-row justify-between mt-1">
-              <Text className="text-xs text-gray-500">
-                Tell others what makes you unique
-              </Text>
-              <Text className="text-xs text-gray-400">
-                {profile.bio.length}/500
-              </Text>
-            </View>
-          </View>
 
-          <View className="flex-row gap-4 mb-4">
-            <View className="flex-1">
-              <Text className="text-sm font-medium text-gray-300 mb-2">
-                Age *
+            {/* Basic Info Card */}
+            <View className="bg-gray-900 rounded-3xl p-6 mb-6 border border-gray-800">
+              <Text className="text-white text-lg font-semibold mb-4">
+                About You
               </Text>
-              <TextInput
-                value={profile.age.toString()}
-                onChangeText={(text) =>
-                  setProfile({ ...profile, age: parseInt(text) || 0 })
-                }
-                placeholder="25"
-                placeholderTextColor="#6b7280"
-                keyboardType="numeric"
-                className="p-3 border border-gray-600 rounded-xl text-white bg-gray-800"
-              />
-            </View>
-          </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-300 mb-2">
-              Height
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View className="flex-row gap-2">
-                {heightOptions.map((height) => (
-                  <TouchableOpacity
-                    key={height}
-                    onPress={() => setProfile({ ...profile, height })}
-                    className="px-3 py-2 rounded-full border"
-                    style={{
-                      backgroundColor:
-                        profile.height === height ? "#e5e7eb" : "transparent",
-                      borderColor:
-                        profile.height === height ? "#e5e7eb" : "#6b7280",
-                    }}
-                  >
-                    <Text
-                      className="text-sm"
-                      style={{
-                        color:
-                          profile.height === height ? "#111827" : "#d1d5db",
-                      }}
-                    >
-                      {height}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              {/* NEW: Gender Selection - MOVED TO TOP */}
+              <GenderSelection />
+
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-300 mb-2">
+                  Bio *
+                </Text>
+                <TextInput
+                  value={profile.bio}
+                  onChangeText={(text) => setProfile({ ...profile, bio: text })}
+                  placeholder="Write a short bio about yourself..."
+                  placeholderTextColor="#6b7280"
+                  className="p-4 border border-gray-600 rounded-xl text-white bg-gray-800"
+                  multiline
+                  numberOfLines={3}
+                  maxLength={500}
+                />
+                <View className="flex-row justify-between mt-1">
+                  <Text className="text-xs text-gray-500">
+                    Tell others what makes you unique
+                  </Text>
+                  <Text className="text-xs text-gray-400">
+                    {profile.bio.length}/500
+                  </Text>
+                </View>
               </View>
-            </ScrollView>
-          </View>
-        </View>
-        {/* Lifestyle Info Card */}
-        <View className="bg-gray-900 rounded-3xl p-6 mb-6 border border-gray-800">
-          <Text className="text-white text-lg font-semibold mb-4">
-            Lifestyle
-          </Text>
 
-          {/* ADD JOB FIELD */}
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-300 mb-2">Job</Text>
-            <TextInput
-              value={profile.job}
-              onChangeText={(text) => setProfile({ ...profile, job: text })}
-              placeholder="What do you do for work?"
-              placeholderTextColor="#6b7280"
-              className="p-4 border border-gray-600 rounded-xl text-white bg-gray-800"
-              maxLength={100}
-            />
-          </View>
+              {/* Show age from birthday if available */}
+              {user?.age && (
+                <View className="mb-4">
+                  <Text className="text-sm font-medium text-gray-300 mb-2">
+                    Age
+                  </Text>
+                  <View className="p-3 border border-gray-600 rounded-xl bg-gray-700">
+                    <Text className="text-white">{user.age} years old</Text>
+                    <Text className="text-xs text-gray-400 mt-1">
+                      Based on your birthday
+                    </Text>
+                  </View>
+                </View>
+              )}
 
-          {/* MOVE LOCATION HERE */}
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-300 mb-2">
-              Location
-            </Text>
-            <TextInput
-              value={profile.location}
-              onChangeText={(text) =>
-                setProfile({ ...profile, location: text })
-              }
-              placeholder="Where are you located?"
-              placeholderTextColor="#6b7280"
-              className="p-4 border border-gray-600 rounded-xl text-white bg-gray-800"
-            />
-          </View>
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-300 mb-2">
+                  Height
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View className="flex-row gap-2">
+                    {heightOptions.map((height) => (
+                      <TouchableOpacity
+                        key={height}
+                        onPress={() => setProfile({ ...profile, height })}
+                        className="px-3 py-2 rounded-full border"
+                        style={{
+                          backgroundColor:
+                            profile.height === height
+                              ? "#e5e7eb"
+                              : "transparent",
+                          borderColor:
+                            profile.height === height ? "#e5e7eb" : "#6b7280",
+                        }}
+                      >
+                        <Text
+                          className="text-sm"
+                          style={{
+                            color:
+                              profile.height === height ? "#111827" : "#d1d5db",
+                          }}
+                        >
+                          {height}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+            </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-300 mb-2">
-              Religion
-            </Text>
-            <SelectionButton
-              options={religionOptions}
-              selectedValue={profile.religion}
-              onSelect={(value) => setProfile({ ...profile, religion: value })}
-              placeholder="Select religion"
-            />
-          </View>
+            {/* Lifestyle Info Card */}
+            <View className="bg-gray-900 rounded-3xl p-6 mb-6 border border-gray-800">
+              <Text className="text-white text-lg font-semibold mb-4">
+                Lifestyle
+              </Text>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-300 mb-2">
-              Relationship Type
-            </Text>
-            <SelectionButton
-              options={relationshipOptions}
-              selectedValue={profile.relationshipType}
-              onSelect={(value) =>
-                setProfile({ ...profile, relationshipType: value })
-              }
-              placeholder="Select relationship type"
-            />
-          </View>
-
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-300 mb-2">
-              Dating Style
-            </Text>
-            <SelectionButton
-              options={lifestyleOptions}
-              selectedValue={profile.lifestyle}
-              onSelect={(value) => setProfile({ ...profile, lifestyle: value })}
-              placeholder="Select dating style"
-            />
-          </View>
-        </View>
-        {/* Vitals & Vices Card */}
-        <View className="bg-gray-900 rounded-3xl p-6 mb-6 border border-gray-800">
-          <Text className="text-white text-lg font-semibold mb-4">
-            Vitals & Vices
-          </Text>
-
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-300 mb-2">
-              Do you have children?
-            </Text>
-            <SelectionButton
-              options={["Have children", "Don't have children"]}
-              selectedValue={profile.hasChildren}
-              onSelect={(value) =>
-                setProfile({ ...profile, hasChildren: value })
-              }
-              placeholder="Select option"
-            />
-          </View>
-
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-300 mb-2">
-              Do you want children?
-            </Text>
-            <SelectionButton
-              options={[
-                "Want children",
-                "Don't want children",
-                "Open to children",
-              ]}
-              selectedValue={profile.wantChildren}
-              onSelect={(value) =>
-                setProfile({ ...profile, wantChildren: value })
-              }
-              placeholder="Select option"
-            />
-          </View>
-
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-300 mb-2">
-              Drinking
-            </Text>
-            <SelectionButton
-              options={["Never", "Sometimes", "Frequently"]}
-              selectedValue={profile.drinking}
-              onSelect={(value) => setProfile({ ...profile, drinking: value })}
-              placeholder="Select option"
-            />
-          </View>
-
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-300 mb-2">
-              Smoking
-            </Text>
-            <SelectionButton
-              options={["No", "Sometimes", "Yes"]}
-              selectedValue={profile.smoking}
-              onSelect={(value) => setProfile({ ...profile, smoking: value })}
-              placeholder="Select option"
-            />
-          </View>
-
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-300 mb-2">
-              Drugs
-            </Text>
-            <SelectionButton
-              options={["No", "Sometimes", "Yes"]}
-              selectedValue={profile.drugs}
-              onSelect={(value) => setProfile({ ...profile, drugs: value })}
-              placeholder="Select option"
-            />
-          </View>
-        </View>
-        {/* Virtues Card */}
-        <View className="bg-gray-900 rounded-3xl p-6 mb-6 border border-gray-800">
-          <Text className="text-white text-lg font-semibold mb-4">Virtues</Text>
-
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-300 mb-2">
-              Looking for
-            </Text>
-            <TextInput
-              value={profile.lookingFor}
-              onChangeText={(text) =>
-                setProfile({ ...profile, lookingFor: text })
-              }
-              placeholder="What are you looking for in a partner?"
-              placeholderTextColor="#6b7280"
-              className="p-4 border border-gray-600 rounded-xl text-white bg-gray-800"
-              multiline
-              numberOfLines={2}
-              maxLength={200}
-            />
-          </View>
-        </View>
-        {/* Additional Photos */}
-        <View className="mb-6">
-          <Text className="text-white text-lg font-semibold mb-4">
-            More Photos
-          </Text>
-          <Text className="text-gray-400 text-sm mb-4">
-            Add up to 5 more photos to show different sides of your personality
-          </Text>
-
-          {/* Grid layout with proper square aspect ratios */}
-          <View className="flex-row flex-wrap justify-between">
-            {[1, 2, 3, 4, 5].map((index) => (
-              <View key={index} className="w-[48%] mb-4 aspect-[3/4]">
-                {" "}
-                {/* Added aspect-square */}
-                <PhotoUploadSlot
-                  photo={profile.photos[index]}
-                  onPhotoSelect={() => handlePhotoSelect(index)}
-                  onRemovePhoto={() => handleRemovePhoto(index)}
-                  index={index}
-                  isUploading={uploadingPhoto === index}
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-300 mb-2">
+                  Job
+                </Text>
+                <TextInput
+                  value={profile.job}
+                  onChangeText={(text) => setProfile({ ...profile, job: text })}
+                  placeholder="What do you do for work?"
+                  placeholderTextColor="#6b7280"
+                  className="p-4 border border-gray-600 rounded-xl text-white bg-gray-800"
+                  maxLength={100}
                 />
               </View>
-            ))}
-          </View>
-        </View>
-        {/* Prompts Section - Using the new PromptCard component */}
-        <View className="mb-6">
-          <Text className="text-white text-lg font-semibold mb-4">Prompts</Text>
-          <Text className="text-gray-400 text-sm mb-4">
-            Answer prompts to show your personality
-          </Text>
 
-          {[0, 1, 2].map((index) => (
-            <PromptCard
-              key={index}
-              prompt={profile.prompts[index] || { question: "", answer: "" }}
-              promptIndex={index}
-              onPromptChange={handlePromptChange}
-              onSelectPrompt={handlePromptSelect}
-            />
-          ))}
-        </View>
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-300 mb-2">
+                  Location *
+                </Text>
+                <TextInput
+                  value={profile.location}
+                  onChangeText={(text) =>
+                    setProfile({ ...profile, location: text })
+                  }
+                  placeholder="Where are you located?"
+                  placeholderTextColor="#6b7280"
+                  className="p-4 border border-gray-600 rounded-xl text-white bg-gray-800"
+                />
+              </View>
 
-        {/* Dating Preferences */}
-        <View className="bg-gray-900 rounded-3xl p-6 mb-6 border border-gray-800">
-          <Text className="text-lg font-semibold text-white mb-4">
-            Dating Preferences
-          </Text>
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-300 mb-2">
+                  Religion
+                </Text>
+                <SelectionButton
+                  options={religionOptions}
+                  selectedValue={profile.religion}
+                  onSelect={(value) =>
+                    setProfile({ ...profile, religion: value })
+                  }
+                  placeholder="Select religion"
+                />
+              </View>
 
-          <View className="space-y-4">
-            <View>
-              <Text className="text-sm font-medium text-gray-300 mb-2">
-                Looking for
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-300 mb-2">
+                  Relationship Type
+                </Text>
+                <SelectionButton
+                  options={relationshipOptions}
+                  selectedValue={profile.relationshipType}
+                  onSelect={(value) =>
+                    setProfile({ ...profile, relationshipType: value })
+                  }
+                  placeholder="Select relationship type"
+                />
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-300 mb-2">
+                  Dating Style
+                </Text>
+                <SelectionButton
+                  options={lifestyleOptions}
+                  selectedValue={profile.lifestyle}
+                  onSelect={(value) =>
+                    setProfile({ ...profile, lifestyle: value })
+                  }
+                  placeholder="Select dating style"
+                />
+              </View>
+            </View>
+
+            {/* Vitals & Vices Card */}
+            <View className="bg-gray-900 rounded-3xl p-6 mb-6 border border-gray-800">
+              <Text className="text-white text-lg font-semibold mb-4">
+                Vitals & Vices
               </Text>
-              <View className="flex-row gap-2">
-                {["Everyone", "Men", "Women"].map((option) => (
-                  <TouchableOpacity
-                    key={option}
-                    onPress={() =>
-                      setProfile({ ...profile, genderPreference: option })
-                    }
-                    className="px-4 py-2 rounded-full border"
-                    style={{
-                      backgroundColor:
-                        profile.genderPreference === option
-                          ? "#e5e7eb"
-                          : "transparent",
-                      borderColor:
-                        profile.genderPreference === option
-                          ? "#e5e7eb"
-                          : "#6b7280",
-                    }}
-                  >
-                    <Text
-                      className="text-sm"
-                      style={{
-                        color:
-                          profile.genderPreference === option
-                            ? "#111827"
-                            : "#d1d5db",
-                      }}
-                    >
-                      {option}
-                    </Text>
-                  </TouchableOpacity>
+
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-300 mb-2">
+                  Do you have children?
+                </Text>
+                <SelectionButton
+                  options={["Have children", "Don't have children"]}
+                  selectedValue={profile.hasChildren}
+                  onSelect={(value) =>
+                    setProfile({ ...profile, hasChildren: value })
+                  }
+                  placeholder="Select option"
+                />
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-300 mb-2">
+                  Do you want children?
+                </Text>
+                <SelectionButton
+                  options={[
+                    "Want children",
+                    "Don't want children",
+                    "Open to children",
+                  ]}
+                  selectedValue={profile.wantChildren}
+                  onSelect={(value) =>
+                    setProfile({ ...profile, wantChildren: value })
+                  }
+                  placeholder="Select option"
+                />
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-300 mb-2">
+                  Drinking
+                </Text>
+                <SelectionButton
+                  options={["Never", "Sometimes", "Frequently"]}
+                  selectedValue={profile.drinking}
+                  onSelect={(value) =>
+                    setProfile({ ...profile, drinking: value })
+                  }
+                  placeholder="Select option"
+                />
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-300 mb-2">
+                  Smoking
+                </Text>
+                <SelectionButton
+                  options={["No", "Sometimes", "Yes"]}
+                  selectedValue={profile.smoking}
+                  onSelect={(value) =>
+                    setProfile({ ...profile, smoking: value })
+                  }
+                  placeholder="Select option"
+                />
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-300 mb-2">
+                  Drugs
+                </Text>
+                <SelectionButton
+                  options={["No", "Sometimes", "Yes"]}
+                  selectedValue={profile.drugs}
+                  onSelect={(value) => setProfile({ ...profile, drugs: value })}
+                  placeholder="Select option"
+                />
+              </View>
+            </View>
+
+            {/* Virtues Card */}
+            <View className="bg-gray-900 rounded-3xl p-6 mb-6 border border-gray-800">
+              <Text className="text-white text-lg font-semibold mb-4">
+                Virtues
+              </Text>
+
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-300 mb-2">
+                  Looking for
+                </Text>
+                <TextInput
+                  value={profile.lookingFor}
+                  onChangeText={(text) =>
+                    setProfile({ ...profile, lookingFor: text })
+                  }
+                  placeholder="What are you looking for in a partner?"
+                  placeholderTextColor="#6b7280"
+                  className="p-4 border border-gray-600 rounded-xl text-white bg-gray-800"
+                  multiline
+                  numberOfLines={2}
+                  maxLength={200}
+                />
+              </View>
+            </View>
+
+            {/* Additional Photos */}
+            <View className="mb-6">
+              <Text className="text-white text-lg font-semibold mb-4">
+                More Photos
+              </Text>
+              <Text className="text-gray-400 text-sm mb-4">
+                Add up to 5 more photos to show different sides of your
+                personality
+              </Text>
+
+              <View className="flex-row flex-wrap justify-between">
+                {[1, 2, 3, 4, 5].map((index) => (
+                  <View key={index} className="w-[48%] mb-4 aspect-[3/4]">
+                    <PhotoUploadSlot
+                      photo={profile.photos[index]}
+                      onPhotoSelect={() => handlePhotoSelect(index)}
+                      onRemovePhoto={() => handleRemovePhoto(index)}
+                      index={index}
+                      isUploading={uploadingPhoto === index}
+                    />
+                  </View>
                 ))}
               </View>
             </View>
 
-            <View className="flex-row gap-4">
-              <View className="flex-1">
-                <View className="flex-row justify-between items-center mb-2">
-                  <Text className="text-sm font-medium text-gray-300">
-                    Min Age
-                  </Text>
-                  <Text className="text-sm font-medium text-white">
-                    {profile.minAge}
-                  </Text>
-                </View>
-                <Slider
-                  className="w-full h-10"
-                  style={{
-                    height: 40,
-                  }}
-                  minimumValue={18}
-                  maximumValue={85}
-                  value={profile.minAge}
-                  onValueChange={(value) =>
-                    setProfile({ ...profile, minAge: Math.round(value) })
-                  }
-                  minimumTrackTintColor="#e5e7eb"
-                  maximumTrackTintColor="#6b7280"
-                  thumbStyle={{ backgroundColor: "#e5e7eb" }}
-                  trackStyle={{ height: 4, borderRadius: 2 }}
-                />
-              </View>
+            {/* Prompts Section */}
+            <View className="mb-6">
+              <Text className="text-white text-lg font-semibold mb-4">
+                Prompts
+              </Text>
+              <Text className="text-gray-400 text-sm mb-4">
+                Answer prompts to show your personality
+              </Text>
 
-              <View className="flex-1">
-                <View className="flex-row justify-between items-center mb-2">
-                  <Text className="text-sm font-medium text-gray-300">
-                    Max Age
-                  </Text>
-                  <Text className="text-sm font-medium text-white">
-                    {profile.maxAge === 85 ? "85+" : profile.maxAge}
-                  </Text>
-                </View>
-                <Slider
-                  className="w-full h-10"
-                  style={{
-                    height: 40,
-                  }}
-                  minimumValue={18}
-                  maximumValue={85}
-                  value={profile.maxAge}
-                  onValueChange={(value) =>
-                    setProfile({ ...profile, maxAge: Math.round(value) })
+              {[0, 1, 2].map((index) => (
+                <PromptCard
+                  key={index}
+                  prompt={
+                    profile.prompts[index] || { question: "", answer: "" }
                   }
-                  minimumTrackTintColor="#e5e7eb"
-                  maximumTrackTintColor="#6b7280"
-                  thumbStyle={{ backgroundColor: "#e5e7eb" }}
-                  trackStyle={{ height: 4, borderRadius: 2 }}
+                  promptIndex={index}
+                  onPromptChange={handlePromptChange}
+                  onSelectPrompt={handlePromptSelect}
                 />
-              </View>
+              ))}
             </View>
 
-            <View>
-              <View className="flex-row justify-between items-center mb-2">
-                <Text className="text-sm font-medium text-gray-300">
-                  Max Distance (miles)
-                </Text>
-                <Text className="text-sm font-medium text-white">
-                  {profile.maxDistance}
+            {/* Note about preferences moved to settings */}
+            <View className="bg-blue-600/20 border border-blue-600/50 rounded-xl p-4 mb-6">
+              <View className="flex-row items-center mb-2">
+                <MaterialIcons name="settings" size={20} color="#60A5FA" />
+                <Text className="text-blue-300 font-semibold ml-2">
+                  Dating Preferences
                 </Text>
               </View>
-              <Slider
-                className="w-full h-10"
-                style={{
-                  height: 40,
-                }}
-                minimumValue={1}
-                maximumValue={100}
-                value={profile.maxDistance}
-                onValueChange={(value) =>
-                  setProfile({ ...profile, maxDistance: Math.round(value) })
-                }
-                minimumTrackTintColor="#e5e7eb"
-                maximumTrackTintColor="#6b7280"
-                thumbStyle={{ backgroundColor: "#e5e7eb" }}
-                trackStyle={{ height: 4, borderRadius: 2 }}
-              />
+              <Text className="text-blue-200 text-sm">
+                Set your age range, gender preferences, and distance preferences
+                in Dating Settings.
+              </Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate("DatingSettings")}
+                className="mt-3 bg-blue-600 rounded-lg py-2 px-4 self-start"
+              >
+                <Text className="text-white font-medium">Go to Settings</Text>
+              </TouchableOpacity>
             </View>
-          </View>
-        </View>
 
-        {/* Bottom spacing */}
-        <View className="h-20" />
+            {/* Bottom spacing */}
+            <View className="h-20" />
+          </>
+        )}
       </ScrollView>
 
       {/* Prompt Selector Modal */}
@@ -1034,7 +980,7 @@ const DatingSetupScreen = () => {
                       const newPrompts = [...profile.prompts];
                       newPrompts[showPromptSelector] = {
                         question: prompt,
-                        answer: "", // Ensure answer is always initialized
+                        answer: "",
                       };
                       setProfile({ ...profile, prompts: newPrompts });
                       setShowPromptSelector(null);
