@@ -49,6 +49,21 @@ interface DatingProfileData {
   gender: string;
 }
 
+const calculateAge = (dateOfBirth: string | null): number | null => {
+  if (!dateOfBirth) return null;
+  const today = new Date();
+  const birthDate = new Date(dateOfBirth);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (
+    monthDiff < 0 ||
+    (monthDiff === 0 && today.getDate() < birthDate.getDate())
+  ) {
+    age--;
+  }
+  return age;
+};
+
 const DatingSetupScreen = () => {
   const navigation = useNavigation();
   const user = useSelector((state: RootState) => state.user);
@@ -85,6 +100,7 @@ const DatingSetupScreen = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState<number | null>(null);
+  const [existingProfile, setExistingProfile] = useState<any>(null);
 
   // Gender options
   const genderOptions = [
@@ -205,51 +221,85 @@ const DatingSetupScreen = () => {
     }
   };
 
+  // Update your loadExistingProfile function:
   const loadExistingProfile = async () => {
     try {
       console.log("🔄 Loading existing dating profile...");
-      const existingProfile = await getCurrentDatingProfile();
+      const existingProfileData = await getCurrentDatingProfile();
       console.log(
         "📋 Raw profile data:",
-        JSON.stringify(existingProfile, null, 2)
+        JSON.stringify(existingProfileData, null, 2)
       );
 
-      if (existingProfile) {
+      if (existingProfileData) {
+        setExistingProfile(existingProfileData);
         console.log("✅ Profile exists, processing data...");
 
-        const photos = existingProfile.photos || [];
+        console.log("🔍 Gender from API:", {
+          rawGender: existingProfileData.gender,
+          genderType: typeof existingProfileData.gender,
+          genderValue: JSON.stringify(existingProfileData.gender),
+        });
+
+        const photos = existingProfileData.photos || [];
         const photosArray = Array(6)
           .fill("")
           .map((_, index) => photos[index] || "");
 
-        const promptsArray = existingProfile.prompts || [];
+        const promptsArray = existingProfileData.prompts || [];
         const normalizedPrompts = Array(3)
           .fill(null)
           .map(
             (_, index) => promptsArray[index] || { question: "", answer: "" }
           );
 
+        // ✅ CONVERT DISPLAY NAME TO ENUM CONSTANT
+        const convertGenderDisplayToEnum = (displayGender: string): string => {
+          const genderMap: { [key: string]: string } = {
+            Man: "MAN",
+            Woman: "WOMAN",
+            "Non-binary": "NON_BINARY",
+            Other: "OTHER",
+          };
+          return genderMap[displayGender] || "";
+        };
+
+        const loadedGender = existingProfileData.gender
+          ? convertGenderDisplayToEnum(existingProfileData.gender)
+          : "";
+
+        console.log("🎯 Converted gender:", {
+          from: existingProfileData.gender,
+          to: loadedGender,
+        });
+
         setProfile({
-          bio: existingProfile.bio || "",
-          location: existingProfile.location || "",
-          height: existingProfile.height || "",
-          job: existingProfile.job || "",
-          religion: existingProfile.religion || "",
-          relationshipType: existingProfile.relationshipType || "",
-          lifestyle: existingProfile.lifestyle || "",
+          bio: existingProfileData.bio || "",
+          location: existingProfileData.location || "",
+          height: existingProfileData.height || "",
+          job: existingProfileData.job || "",
+          religion: existingProfileData.religion || "",
+          relationshipType: existingProfileData.relationshipType || "",
+          lifestyle: existingProfileData.lifestyle || "",
           photos: photosArray,
           prompts: normalizedPrompts,
-          hasChildren: existingProfile.hasChildren || "",
-          wantChildren: existingProfile.wantChildren || "",
-          drinking: existingProfile.drinking || "",
-          smoking: existingProfile.smoking || "",
-          drugs: existingProfile.drugs || "",
-          lookingFor: existingProfile.lookingFor || "",
-          interests: existingProfile.interests || [],
-          virtues: existingProfile.virtues || [],
-          // NEW: Load gender
-          gender: existingProfile.gender || "",
+          hasChildren: existingProfileData.hasChildren || "",
+          wantChildren: existingProfileData.wantChildren || "",
+          drinking: existingProfileData.drinking || "",
+          smoking: existingProfileData.smoking || "",
+          drugs: existingProfileData.drugs || "",
+          lookingFor: existingProfileData.lookingFor || "",
+          interests: existingProfileData.interests || [],
+          virtues: existingProfileData.virtues || [],
+          gender: loadedGender, // ✅ Use converted enum constant
         });
+
+        setTimeout(() => {
+          console.log("🔄 Profile state after loading:", {
+            gender: loadedGender, // This should now be "MAN"
+            bio: existingProfileData.bio?.substring(0, 20) + "...",
+          });
+        }, 100);
       }
     } catch (error) {
       console.error("❌ Error loading profile:", error);
@@ -341,7 +391,6 @@ const DatingSetupScreen = () => {
         return;
       }
 
-      // NEW: Validate gender selection
       if (!profile.gender) {
         Alert.alert("Missing Information", "Please select your gender.");
         return;
@@ -351,11 +400,61 @@ const DatingSetupScreen = () => {
         (photo) => photo.trim() !== ""
       );
 
+      // ✅ FIXED: Get age from existing profile data or calculate from dateOfBirth
+      let userAge = null;
+
+      // First try to get age from existing dating profile
+      if (existingProfile?.user?.age) {
+        userAge = existingProfile.user.age;
+      }
+      // If no existing profile, calculate from user's dateOfBirth
+      else if (user?.dateOfBirth) {
+        const today = new Date();
+        const birthDate = new Date(user.dateOfBirth);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (
+          monthDiff < 0 ||
+          (monthDiff === 0 && today.getDate() < birthDate.getDate())
+        ) {
+          age--;
+        }
+        userAge = age;
+      }
+
       const profileData = {
-        ...profile,
+        bio: profile.bio,
+        location: profile.location,
+        height: profile.height,
+        job: profile.job,
+        religion: profile.religion,
+        relationshipType: profile.relationshipType,
+        lifestyle: profile.lifestyle,
         photos: filteredPhotos,
         prompts: profile.prompts.filter((p) => p.question && p.answer),
+        hasChildren: profile.hasChildren,
+        wantChildren: profile.wantChildren,
+        drinking: profile.drinking,
+        smoking: profile.smoking,
+        drugs: profile.drugs,
+        lookingFor: profile.lookingFor,
+        interests: profile.interests,
+        virtues: profile.virtues,
+        gender: profile.gender,
+        age: userAge, // ✅ Use calculated age
       };
+
+      // Detailed logging
+      console.log("🚀 Sending profile data:", {
+        gender: profileData.gender,
+        age: profileData.age, // Should now be 25
+        bio: profileData.bio.substring(0, 50) + "...",
+        photos: profileData.photos.length,
+        reduxUserAge: user?.age,
+        existingProfileUserAge: existingProfile?.user?.age,
+        userDateOfBirth: user?.dateOfBirth,
+        calculatedAge: userAge,
+      });
 
       await createOrUpdateDatingProfile(profileData);
 
@@ -423,15 +522,15 @@ const DatingSetupScreen = () => {
             className="px-4 py-3 rounded-xl border flex-1 min-w-[45%]"
             style={{
               backgroundColor:
-                profile.gender === option.value ? "#FF6B9D" : "transparent",
+                profile.gender === option.value ? "#e5e7eb" : "transparent", // ✅ Changed from pink to white/gray
               borderColor:
-                profile.gender === option.value ? "#FF6B9D" : "#6b7280",
+                profile.gender === option.value ? "#e5e7eb" : "#6b7280", // ✅ Changed from pink to white/gray
             }}
           >
             <Text
               className="text-sm text-center font-medium"
               style={{
-                color: profile.gender === option.value ? "#FFFFFF" : "#d1d5db",
+                color: profile.gender === option.value ? "#111827" : "#d1d5db", // ✅ Changed text color to dark when selected
               }}
             >
               {option.label}

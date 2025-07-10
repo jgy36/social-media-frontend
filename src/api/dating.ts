@@ -57,8 +57,8 @@ export interface CreateDatingProfileRequest {
     category: string;
     value: string;
   }>;
-  // NEW: Add gender field
   gender: string;
+  age?: number; // ADD this line
 }
 
 export interface DatingPreferences {
@@ -328,13 +328,16 @@ export const isDatingProfileComplete = async (): Promise<boolean> => {
       photosCount: profile?.photos?.length || 0,
       bioLength: profile?.bio?.trim().length || 0,
       hasGender: !!profile?.gender,
+      profileAge: profile?.age, // Add age to the check
+      userAge: profile?.user?.age, // Check user age too
     });
 
     const isComplete =
       profile !== null &&
       profile.photos.length > 0 &&
       profile.bio.trim().length > 0 &&
-      profile.gender;
+      profile.gender &&
+      (profile.age || profile.user?.age); // ✅ Check either profile age or user age
 
     console.log("✅ Profile is complete:", isComplete);
     return isComplete;
