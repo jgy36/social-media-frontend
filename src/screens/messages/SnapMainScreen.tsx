@@ -1,4 +1,4 @@
-// src/screens/messages/SnapMainScreen.tsx - Snapchat-style 3-tab navigator with swipe
+// src/screens/messages/SnapMainScreen.tsx - With memories navigation
 import React, { useState, useRef, useEffect } from "react";
 import {
   View,
@@ -17,51 +17,92 @@ import SnapContactsTab from "./SnapContactsTab";
 
 const { width } = Dimensions.get("window");
 
+interface PreSelectedRecipient {
+  userId: number;
+  name: string;
+}
+
 const SnapMainScreen = () => {
   const navigation = useNavigation();
+
   const [activeTab, setActiveTab] = useState<
     "messages" | "camera" | "contacts"
   >("camera");
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const [preSelectedRecipient, setPreSelectedRecipient] =
+    useState<PreSelectedRecipient | null>(null);
 
-  // Animation values for smooth transitions
   const translateX = useRef(new Animated.Value(0)).current;
-  const panRef = useRef<any>(null);
-  const activeTabRef = useRef(activeTab); // Track current tab for gesture handler
+  const activeTabRef = useRef(activeTab);
 
-  // Debug state changes
   useEffect(() => {
     console.log("✅ Active tab state changed to:", activeTab);
-    activeTabRef.current = activeTab; // Update ref when state changes
+    activeTabRef.current = activeTab;
   }, [activeTab]);
 
-  // Handle photo capture from camera tab
-  const handlePhotoCapture = (photoUri: string) => {
-    setCapturedPhoto(photoUri);
-    setActiveTab("contacts"); // Switch to contacts to send
-  };
-
-  // Handle photo sent successfully
-  const handlePhotoSent = () => {
+  const handleCameraIconPress = (
+    recipientId: number,
+    recipientName: string
+  ) => {
+    console.log(
+      "📸 Camera icon pressed for:",
+      recipientName,
+      "ID:",
+      recipientId
+    );
+    setPreSelectedRecipient({ userId: recipientId, name: recipientName });
     setCapturedPhoto(null);
-    setActiveTab("messages"); // Go back to messages
+    setActiveTab("camera");
   };
 
-  // Handle tab swipe or navigation
+  const handleDeselectRecipient = () => {
+    console.log("❌ Deselecting recipient");
+    setPreSelectedRecipient(null);
+  };
+
+  const handlePhotoCapture = (photoUri: string) => {
+    console.log("📷 Photo captured, switching to contacts tab");
+    setCapturedPhoto(photoUri);
+    setActiveTab("contacts");
+  };
+
+  const handlePhotoSent = () => {
+    console.log("✅ Photo sent successfully");
+    setCapturedPhoto(null);
+    setPreSelectedRecipient(null);
+    setActiveTab("messages");
+  };
+
+  const handleGoBackToCamera = () => {
+    console.log("⬅️ Going back to camera from contacts");
+    setActiveTab("camera");
+  };
+
+  // ADDED: Navigate to memories function
+  const handleNavigateToMemories = () => {
+    console.log("📚 Navigating to memories");
+    // @ts-ignore - Navigation type might not include Memories yet
+    navigation.navigate("Memories");
+  };
+
   const switchTab = (tab: "messages" | "camera" | "contacts") => {
     console.log("🔄 Switching from", activeTab, "to", tab);
     setActiveTab(tab);
-    if (tab === "camera") {
-      setCapturedPhoto(null); // Clear any captured photo when going to camera
+
+    if (tab === "camera" && !preSelectedRecipient && !capturedPhoto) {
+      setCapturedPhoto(null);
+    }
+
+    if (tab === "messages") {
+      setCapturedPhoto(null);
+      setPreSelectedRecipient(null);
     }
   };
 
-  // Swipe gesture handler
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (evt, gestureState) => {
-        // Only respond to horizontal swipes that are significant
         const isHorizontalSwipe =
           Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
         const isSignificantSwipe = Math.abs(gestureState.dx) > 30;
@@ -71,23 +112,14 @@ const SnapMainScreen = () => {
         console.log("Gesture started on tab:", activeTabRef.current);
       },
       onPanResponderMove: (evt, gestureState) => {
-        // Minimal visual feedback during swipe
         if (Math.abs(gestureState.dx) < width * 0.3) {
-          translateX.setValue(gestureState.dx * 0.1); // Very subtle movement
+          translateX.setValue(gestureState.dx * 0.1);
         }
       },
       onPanResponderRelease: (evt, gestureState) => {
-        const currentTab = activeTabRef.current; // Use ref instead of state
-        console.log(
-          "Gesture ended. dx:",
-          gestureState.dx,
-          "Current tab:",
-          currentTab
-        );
+        const currentTab = activeTabRef.current;
+        const swipeThreshold = 50;
 
-        const swipeThreshold = 50; // Lower threshold for easier swiping
-
-        // Reset animation
         Animated.spring(translateX, {
           toValue: 0,
           useNativeDriver: true,
@@ -95,31 +127,21 @@ const SnapMainScreen = () => {
           friction: 8,
         }).start();
 
-        // Simple, explicit tab switching logic
         if (gestureState.dx > swipeThreshold) {
-          // Swipe right - go backward
-          console.log("Swiping right from:", currentTab);
           if (currentTab === "contacts") {
-            console.log("Moving to camera");
-            switchTab("camera");
+            handleGoBackToCamera();
           } else if (currentTab === "camera") {
-            console.log("Moving to messages");
             switchTab("messages");
           }
         } else if (gestureState.dx < -swipeThreshold) {
-          // Swipe left - go forward
-          console.log("Swiping left from:", currentTab);
           if (currentTab === "messages") {
-            console.log("Moving to camera");
             switchTab("camera");
           } else if (currentTab === "camera") {
-            console.log("Moving to contacts");
             switchTab("contacts");
           }
         }
       },
       onPanResponderTerminate: () => {
-        // Reset animation if gesture is cancelled
         Animated.spring(translateX, {
           toValue: 0,
           useNativeDriver: true,
@@ -129,15 +151,19 @@ const SnapMainScreen = () => {
   ).current;
 
   const renderTabContent = () => {
-    console.log("🎬 Rendering tab content for:", activeTab);
     switch (activeTab) {
       case "messages":
-        return <SnapMessagesTab />;
+        return <SnapMessagesTab onCameraIconPress={handleCameraIconPress} />;
       case "camera":
         return (
           <SnapCameraTab
             onPhotoCapture={handlePhotoCapture}
             onNavigateToContacts={() => setActiveTab("contacts")}
+            onNavigateToMemories={handleNavigateToMemories} // ADDED: Pass the memories function
+            preSelectedRecipient={preSelectedRecipient}
+            onDeselectRecipient={handleDeselectRecipient}
+            capturedPhoto={capturedPhoto}
+            onResetPhoto={() => setCapturedPhoto(null)}
           />
         );
       case "contacts":
@@ -145,7 +171,8 @@ const SnapMainScreen = () => {
           <SnapContactsTab
             capturedPhoto={capturedPhoto}
             onPhotoSent={handlePhotoSent}
-            onGoBack={() => setActiveTab("camera")}
+            onGoBack={handleGoBackToCamera}
+            preSelectedRecipient={preSelectedRecipient}
           />
         );
       default:
@@ -153,6 +180,11 @@ const SnapMainScreen = () => {
           <SnapCameraTab
             onPhotoCapture={handlePhotoCapture}
             onNavigateToContacts={() => setActiveTab("contacts")}
+            onNavigateToMemories={handleNavigateToMemories} // ADDED: Pass the memories function here too
+            preSelectedRecipient={preSelectedRecipient}
+            onDeselectRecipient={handleDeselectRecipient}
+            capturedPhoto={capturedPhoto}
+            onResetPhoto={() => setCapturedPhoto(null)}
           />
         );
     }
@@ -160,9 +192,7 @@ const SnapMainScreen = () => {
 
   return (
     <SafeAreaView className="flex-1 bg-black">
-      {/* Top Tab Indicators */}
       <View className="flex-row justify-center items-center py-3 bg-black bg-opacity-80">
-        {/* Messages Tab */}
         <TouchableOpacity
           onPress={() => switchTab("messages")}
           className="flex-1 items-center py-2"
@@ -177,7 +207,6 @@ const SnapMainScreen = () => {
           />
         </TouchableOpacity>
 
-        {/* Camera Tab */}
         <TouchableOpacity
           onPress={() => switchTab("camera")}
           className="flex-1 items-center py-2"
@@ -192,7 +221,6 @@ const SnapMainScreen = () => {
           />
         </TouchableOpacity>
 
-        {/* Contacts Tab */}
         <TouchableOpacity
           onPress={() => switchTab("contacts")}
           className="flex-1 items-center py-2"
@@ -208,32 +236,9 @@ const SnapMainScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Tab Content with Swipe Gesture */}
       <View className="flex-1" {...panResponder.panHandlers}>
         {renderTabContent()}
       </View>
-
-      {/* Bottom Navigation Hint */}
-      {activeTab === "camera" && (
-        <View className="absolute bottom-24 left-0 right-0 items-center">
-          <View className="bg-black bg-opacity-60 px-4 py-2 rounded-full">
-            <Text className="text-white text-xs">
-              ← Messages • Camera • Contacts →
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* Swipe Hint for first-time users */}
-      {activeTab === "camera" && (
-        <View className="absolute bottom-32 left-0 right-0 items-center">
-          <View className="bg-black bg-opacity-40 px-3 py-1 rounded-full">
-            <Text className="text-white text-xs opacity-70">
-              Swipe to navigate
-            </Text>
-          </View>
-        </View>
-      )}
     </SafeAreaView>
   );
 };

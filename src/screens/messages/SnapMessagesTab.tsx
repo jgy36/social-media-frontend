@@ -1,4 +1,4 @@
-// src/screens/messages/SnapMessagesTab.tsx
+// src/screens/messages/SnapMessagesTab.tsx - All green, no pink
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -18,7 +18,13 @@ import {
   EnhancedPhotoConversation,
 } from "@/api/photoMessages";
 
-const SnapMessagesTab = () => {
+interface SnapMessagesTabProps {
+  onCameraIconPress?: (recipientId: number, recipientName: string) => void;
+}
+
+const SnapMessagesTab: React.FC<SnapMessagesTabProps> = ({
+  onCameraIconPress,
+}) => {
   const navigation = useNavigation<RootStackNavigationProp>();
   const currentUser = useSelector((state: RootState) => state.user);
   const [conversations, setConversations] = useState<
@@ -36,17 +42,6 @@ const SnapMessagesTab = () => {
         data.length,
         "conversations"
       );
-
-      // Log each conversation's lastMessage data for debugging
-      data.forEach((conv, index) => {
-        console.log(`📄 Conversation ${index + 1} (${conv.username}):`, {
-          userId: conv.userId,
-          unreadCount: conv.unreadCount,
-          isMatch: conv.isMatch,
-          isNewMatch: conv.isNewMatch,
-          lastMessage: conv.lastMessage,
-        });
-      });
 
       setConversations(data);
     } catch (error) {
@@ -103,91 +98,59 @@ const SnapMessagesTab = () => {
     return date.toLocaleDateString();
   };
 
-  // Enhanced status function using real API data
   const getConversationStatus = (conversation: EnhancedPhotoConversation) => {
-    console.log(`🔍 Getting status for ${conversation.username}:`, {
-      userId: conversation.userId,
-      currentUserId: currentUser.id,
-      unreadCount: conversation.unreadCount,
-      isNewMatch: conversation.isNewMatch,
-      lastMessage: conversation.lastMessage,
-    });
-
-    // Priority 1: New matches (show heart icon)
     if (conversation.isNewMatch) {
-      console.log("💖 Status: New Match");
       return {
         type: "newMatch",
         text: "New Match!",
-        color: "#FF6B9D",
+        color: "#10B981", // Changed from #FF6B9D to green
         showSnapIcon: false,
       };
     }
 
-    // Priority 2: Unread messages (show solid red square)
     if (conversation.unreadCount > 0) {
-      console.log("🔴 Status: Unread Snap");
       return {
         type: "receivedSnap",
         text: "New Snap",
         color: "#FF4757",
         showSnapIcon: true,
-        snapOpened: false, // Solid square for unread
+        snapOpened: false,
       };
     }
 
-    // Priority 3: Handle conversations with message history
     if (conversation.lastMessage) {
       const isSentByCurrentUser =
         conversation.lastMessage.senderId === currentUser.id;
       const isMessageViewed = conversation.lastMessage.isViewed;
 
-      console.log(
-        `📝 Status: Has last message - Sent by current user: ${isSentByCurrentUser}, Viewed: ${isMessageViewed}`
-      );
-
       if (isSentByCurrentUser) {
-        // Current user sent the last message - show arrows
-        console.log(
-          `📤 Status: Sent snap - ${
-            isMessageViewed ? "Hollow" : "Solid"
-          } arrows`
-        );
         return {
           type: "sentSnap",
           text: formatDetailedTime(conversation.lastMessageAt),
           color: "#8E8E93",
           showSnapIcon: true,
-          snapOpened: isMessageViewed, // TRUE = hollow arrows, FALSE = solid arrows
+          snapOpened: isMessageViewed,
         };
       } else {
-        // Other user sent the last message and it was viewed (since unreadCount = 0)
-        console.log(
-          "📥 Status: Received snap (already viewed) - Hollow square"
-        );
         return {
           type: "receivedSnap",
           text: formatDetailedTime(conversation.lastMessageAt),
           color: "#8E8E93",
           showSnapIcon: true,
-          snapOpened: true, // Hollow square for viewed received snap
+          snapOpened: true,
         };
       }
     }
 
-    // Priority 4: Match with no messages yet
     if (conversation.isMatch) {
-      console.log("💕 Status: Match (no messages)");
       return {
         type: "match",
         text: "Say hello! 👋",
-        color: "#FF6B9D",
+        color: "#10B981", // Changed from #FF6B9D to green
         showSnapIcon: false,
       };
     }
 
-    // Fallback: No activity
-    console.log("⚪ Status: No activity");
     return {
       type: "noActivity",
       text: "Start a conversation",
@@ -196,7 +159,6 @@ const SnapMessagesTab = () => {
     };
   };
 
-  // Clean icon rendering function
   const renderSnapIcon = (status: any) => {
     if (!status.showSnapIcon) {
       if (status.type === "newMatch" || status.type === "match") {
@@ -213,10 +175,6 @@ const SnapMessagesTab = () => {
     }
 
     if (status.type === "receivedSnap") {
-      // Square for received snaps
-      console.log(
-        `🟦 Rendering received snap square - opened: ${status.snapOpened}`
-      );
       return (
         <View
           style={{
@@ -233,11 +191,6 @@ const SnapMessagesTab = () => {
     }
 
     if (status.type === "sentSnap") {
-      // Triple chevron arrows for sent snaps
-      console.log(
-        `🎯 Rendering sent snap arrows - opened: ${status.snapOpened}`
-      );
-
       const renderSingleChevron = () => (
         <View
           style={{
@@ -249,21 +202,18 @@ const SnapMessagesTab = () => {
             position: "relative",
           }}
         >
-          {/* White chevron outline */}
           <View
             style={{
               width: 12,
               height: 12,
               borderRightWidth: 6,
               borderTopWidth: 6,
-              borderRightColor: "#FFFFFF",
-              borderTopColor: "#FFFFFF",
+              borderRightColor: "#10B981",
+              borderTopColor: "#10B981",
               transform: [{ rotate: "45deg" }],
               backgroundColor: "transparent",
             }}
           />
-
-          {/* Black center if snap is opened (hollow) */}
           {status.snapOpened && (
             <View
               style={{
@@ -324,7 +274,6 @@ const SnapMessagesTab = () => {
         }}
         activeOpacity={0.8}
       >
-        {/* Profile Image */}
         <View style={{ position: "relative" }}>
           <Image
             source={{
@@ -341,14 +290,13 @@ const SnapMessagesTab = () => {
             }}
           />
 
-          {/* Match Heart Badge */}
           {item.isMatch && (
             <View
               style={{
                 position: "absolute",
                 bottom: -2,
                 right: -2,
-                backgroundColor: "#FF6B9D",
+                backgroundColor: "#10B981", // Changed from #FF6B9D to green
                 borderRadius: 10,
                 width: 20,
                 height: 20,
@@ -363,9 +311,7 @@ const SnapMessagesTab = () => {
           )}
         </View>
 
-        {/* Conversation Info */}
         <View style={{ flex: 1, marginLeft: 12 }}>
-          {/* Name and Time */}
           <View
             style={{
               flexDirection: "row",
@@ -395,7 +341,6 @@ const SnapMessagesTab = () => {
             </Text>
           </View>
 
-          {/* Status with Icon */}
           <View
             style={{
               flexDirection: "row",
@@ -421,7 +366,6 @@ const SnapMessagesTab = () => {
               </Text>
             </View>
 
-            {/* Snap Count or Streak */}
             {item.unreadCount > 0 && (
               <View
                 style={{
@@ -448,11 +392,14 @@ const SnapMessagesTab = () => {
           </View>
         </View>
 
-        {/* Camera Icon for Quick Snap */}
         <TouchableOpacity
-          onPress={() =>
-            navigation.navigate("PhotoCamera", { recipientId: item.userId })
-          }
+          onPress={() => {
+            if (onCameraIconPress) {
+              onCameraIconPress(item.userId, item.displayName || item.username);
+            } else {
+              navigation.navigate("PhotoCamera", { recipientId: item.userId });
+            }
+          }}
           style={{
             width: 32,
             height: 32,
@@ -519,7 +466,7 @@ const SnapMessagesTab = () => {
       <TouchableOpacity
         onPress={() => navigation.navigate("Dating")}
         style={{
-          backgroundColor: "#FF6B9D",
+          backgroundColor: "#10B981", // Changed from #FF6B9D to green
           borderRadius: 25,
           paddingHorizontal: 24,
           paddingVertical: 12,
@@ -626,8 +573,8 @@ const SnapMessagesTab = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#FF6B9D"
-            colors={["#FF6B9D"]}
+            tintColor="#10B981" // Changed from #FF6B9D to green
+            colors={["#10B981"]} // Changed from #FF6B9D to green
           />
         }
         showsVerticalScrollIndicator={false}

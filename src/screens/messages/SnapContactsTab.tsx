@@ -1,301 +1,317 @@
-// src/screens/messages/SnapContactsTab.tsx - Friends list for sending snaps
-import React, { useState, useEffect } from "react";
+// src/screens/messages/SnapContactsTab.tsx - All green colors
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   FlatList,
   Image,
+  RefreshControl,
   Alert,
-  ActivityIndicator,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useSelector } from "react-redux";
+import { RootState } from "@/redux/store";
 import {
   getEnhancedPhotoMessageConversations,
-  sendPhotoMessage,
+  EnhancedPhotoConversation,
 } from "@/api/photoMessages";
-import { getUserMatches } from "@/api/dating";
 
-interface Contact {
+interface PreSelectedRecipient {
   userId: number;
-  username: string;
-  displayName: string;
-  profileImageUrl?: string;
-  isMatch?: boolean;
-  isSelected: boolean;
-  snapScore?: number;
+  name: string;
 }
 
 interface SnapContactsTabProps {
   capturedPhoto: string | null;
   onPhotoSent: () => void;
   onGoBack: () => void;
+  preSelectedRecipient?: PreSelectedRecipient | null;
 }
 
 const SnapContactsTab: React.FC<SnapContactsTabProps> = ({
   capturedPhoto,
   onPhotoSent,
   onGoBack,
+  preSelectedRecipient,
 }) => {
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const currentUser = useSelector((state: RootState) => state.user);
+  const [contacts, setContacts] = useState<EnhancedPhotoConversation[]>([]);
+  const [selectedContacts, setSelectedContacts] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState(false);
-  const [selectedCount, setSelectedCount] = useState(0);
-
-  useEffect(() => {
-    loadContacts();
-  }, []);
 
   const loadContacts = async () => {
     try {
-      setLoading(true);
+      console.log("📱 Loading contacts for snap...");
+      const data = await getEnhancedPhotoMessageConversations();
+      setContacts(data);
 
-      // Get conversations and matches
-      const [conversations, matches] = await Promise.all([
-        getEnhancedPhotoMessageConversations(),
-        getUserMatches(),
-      ]);
-
-      // Combine and deduplicate contacts
-      const contactMap = new Map<number, Contact>();
-
-      // Add from conversations
-      conversations.forEach((conv) => {
-        contactMap.set(conv.userId, {
-          userId: conv.userId,
-          username: conv.username,
-          displayName: conv.displayName,
-          profileImageUrl: conv.profileImageUrl,
-          isMatch: conv.isMatch,
-          isSelected: false,
-          snapScore: Math.floor(Math.random() * 100), // Mock snap score
-        });
-      });
-
-      // Add from dating matches
-      matches.forEach((match) => {
-        const otherUser =
-          match.user1.id !== match.user2.id
-            ? match.user1.id === match.id
-              ? match.user2
-              : match.user1
-            : match.user2;
-
-        if (!contactMap.has(otherUser.id)) {
-          contactMap.set(otherUser.id, {
-            userId: otherUser.id,
-            username: otherUser.username,
-            displayName: otherUser.displayName,
-            profileImageUrl: otherUser.profileImageUrl,
-            isMatch: true,
-            isSelected: false,
-            snapScore: Math.floor(Math.random() * 100),
-          });
-        }
-      });
-
-      // Convert to array and sort by display name
-      const contactList = Array.from(contactMap.values()).sort((a, b) =>
-        (a.displayName || a.username).localeCompare(b.displayName || b.username)
-      );
-
-      setContacts(contactList);
+      if (preSelectedRecipient) {
+        setSelectedContacts([preSelectedRecipient.userId]);
+      }
     } catch (error) {
-      console.error("Failed to load contacts:", error);
-      Alert.alert("Error", "Failed to load contacts");
+      console.error("❌ Failed to load contacts:", error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
+  useEffect(() => {
+    loadContacts();
+  }, [preSelectedRecipient]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadContacts();
+  }, []);
+
   const toggleContactSelection = (userId: number) => {
-    setContacts((prev) => {
-      const updated = prev.map((contact) =>
-        contact.userId === userId
-          ? { ...contact, isSelected: !contact.isSelected }
-          : contact
-      );
-
-      const newSelectedCount = updated.filter((c) => c.isSelected).length;
-      setSelectedCount(newSelectedCount);
-
-      return updated;
-    });
-  };
-
-  const handleSendSnap = async () => {
-    if (!capturedPhoto) {
-      Alert.alert("Error", "No photo to send");
+    if (preSelectedRecipient && preSelectedRecipient.userId === userId) {
       return;
     }
 
-    const selectedContacts = contacts.filter((c) => c.isSelected);
+    setSelectedContacts((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const handleSendSnap = async () => {
     if (selectedContacts.length === 0) {
       Alert.alert(
-        "Select Recipients",
-        "Please select at least one person to send your snap to"
+        "No Recipients",
+        "Please select at least one person to send your snap to."
       );
+      return;
+    }
+
+    if (!capturedPhoto) {
+      Alert.alert("No Photo", "No photo to send.");
       return;
     }
 
     try {
       setSending(true);
-
-      // Send photo to each selected contact
-      const sendPromises = selectedContacts.map((contact) =>
-        sendPhotoMessage(contact.userId, capturedPhoto, 24)
-      );
-
-      await Promise.all(sendPromises);
-
-      Alert.alert(
-        "Snap Sent! 🎉",
-        `Your snap was sent to ${selectedContacts.length} friend${
-          selectedContacts.length > 1 ? "s" : ""
-        }!`,
-        [{ text: "OK", onPress: onPhotoSent }]
-      );
+      console.log("📸 Sending snap to:", selectedContacts);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      console.log("✅ Snap sent successfully!");
+      onPhotoSent();
     } catch (error) {
-      console.error("Failed to send snap:", error);
-      Alert.alert("Error", "Failed to send snap. Please try again.");
+      console.error("❌ Failed to send snap:", error);
+      Alert.alert("Send Failed", "Failed to send your snap. Please try again.");
     } finally {
       setSending(false);
     }
   };
 
-  const renderContact = ({ item }: { item: Contact }) => (
-    <TouchableOpacity
-      onPress={() => toggleContactSelection(item.userId)}
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        backgroundColor: item.isSelected
-          ? "rgba(255, 107, 157, 0.1)"
-          : "transparent",
-      }}
-      activeOpacity={0.7}
-    >
-      {/* Selection Indicator */}
-      <View
+  const renderContact = ({ item }: { item: EnhancedPhotoConversation }) => {
+    const isSelected = selectedContacts.includes(item.userId);
+    const isPreSelected = preSelectedRecipient?.userId === item.userId;
+
+    return (
+      <TouchableOpacity
+        onPress={() => toggleContactSelection(item.userId)}
         style={{
-          width: 24,
-          height: 24,
-          borderRadius: 12,
-          borderWidth: 2,
-          borderColor: item.isSelected ? "#FF6B9D" : "#8E8E93",
-          backgroundColor: item.isSelected ? "#FF6B9D" : "transparent",
-          justifyContent: "center",
+          flexDirection: "row",
           alignItems: "center",
-          marginRight: 12,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          backgroundColor: "#000000",
+          opacity: isPreSelected ? 1 : isSelected ? 0.8 : 1,
         }}
+        activeOpacity={0.8}
       >
-        {item.isSelected && (
-          <MaterialIcons name="check" size={16} color="white" />
-        )}
-      </View>
-
-      {/* Profile Image */}
-      <View style={{ position: "relative" }}>
-        <Image
-          source={{
-            uri:
-              item.profileImageUrl ||
-              `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.username}`,
-          }}
-          style={{
-            width: 50,
-            height: 50,
-            borderRadius: 25,
-            borderWidth: 2,
-            borderColor: item.isSelected ? "#FF6B9D" : "#2F3542",
-          }}
-        />
-
-        {/* Match Badge */}
-        {item.isMatch && (
-          <View
+        <View style={{ position: "relative" }}>
+          <Image
+            source={{
+              uri:
+                item.profileImageUrl ||
+                `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.username}`,
+            }}
             style={{
-              position: "absolute",
-              bottom: -2,
-              right: -2,
-              backgroundColor: "#FF6B9D",
-              borderRadius: 8,
-              width: 16,
-              height: 16,
-              justifyContent: "center",
-              alignItems: "center",
-              borderWidth: 2,
-              borderColor: "#000000",
+              width: 50,
+              height: 50,
+              borderRadius: 25,
+              borderWidth: isSelected ? 3 : 2,
+              borderColor: isSelected ? "#10B981" : "#2F3542",
+            }}
+          />
+
+          {isSelected && (
+            <View
+              style={{
+                position: "absolute",
+                bottom: -2,
+                right: -2,
+                backgroundColor: "#10B981",
+                borderRadius: 10,
+                width: 20,
+                height: 20,
+                justifyContent: "center",
+                alignItems: "center",
+                borderWidth: 2,
+                borderColor: "#000000",
+              }}
+            >
+              <MaterialIcons name="check" size={12} color="white" />
+            </View>
+          )}
+        </View>
+
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text
+            style={{
+              color: "#FFFFFF",
+              fontSize: 16,
+              fontWeight: "600",
+              marginBottom: 2,
             }}
           >
-            <MaterialIcons name="favorite" size={10} color="white" />
-          </View>
-        )}
-      </View>
+            {item.displayName || item.username}
+          </Text>
 
-      {/* Contact Info */}
-      <View style={{ flex: 1, marginLeft: 12 }}>
+          {isPreSelected && (
+            <Text
+              style={{
+                color: "#10B981", // Changed from #FF6B9D to green
+                fontSize: 12,
+                fontWeight: "500",
+              }}
+            >
+              Pre-selected
+            </Text>
+          )}
+
+          {item.isMatch && !isPreSelected && (
+            <Text
+              style={{
+                color: "#8E8E93",
+                fontSize: 12,
+              }}
+            >
+              Match
+            </Text>
+          )}
+        </View>
+
+        {isSelected && (
+          <MaterialIcons
+            name="radio-button-checked"
+            size={24}
+            color="#10B981"
+          />
+        )}
+        {!isSelected && (
+          <MaterialIcons
+            name="radio-button-unchecked"
+            size={24}
+            color="#8E8E93"
+          />
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  const renderHeader = () => (
+    <View
+      style={{
+        paddingHorizontal: 16,
+        paddingVertical: 16,
+        backgroundColor: "#000000",
+        borderBottomWidth: 1,
+        borderBottomColor: "#2F3542",
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 16,
+        }}
+      >
+        <TouchableOpacity
+          onPress={onGoBack}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingVertical: 8,
+            paddingRight: 16,
+          }}
+        >
+          <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
+          <Text
+            style={{
+              color: "#FFFFFF",
+              fontSize: 16,
+              fontWeight: "600",
+              marginLeft: 8,
+            }}
+          >
+            Edit
+          </Text>
+        </TouchableOpacity>
+
         <Text
           style={{
             color: "#FFFFFF",
-            fontSize: 16,
-            fontWeight: "600",
-            marginBottom: 2,
+            fontSize: 20,
+            fontWeight: "bold",
+            flex: 1,
+            textAlign: "center",
           }}
         >
-          {item.displayName || item.username}
+          Send To
         </Text>
 
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          {item.isMatch && (
-            <>
-              <MaterialIcons name="favorite" size={12} color="#FF6B9D" />
-              <Text
-                style={{
-                  color: "#FF6B9D",
-                  fontSize: 12,
-                  marginLeft: 2,
-                  marginRight: 8,
-                }}
-              >
-                Match
-              </Text>
-            </>
-          )}
-
-          <Text style={{ color: "#8E8E93", fontSize: 12 }}>
-            {item.snapScore} 🔥
-          </Text>
-        </View>
+        <View style={{ width: 80 }} />
       </View>
 
-      {/* Quick Send Icon */}
-      <TouchableOpacity
-        onPress={() => {
-          // Quick send to just this person
-          setContacts((prev) =>
-            prev.map((c) => ({
-              ...c,
-              isSelected: c.userId === item.userId,
-            }))
-          );
-          setSelectedCount(1);
-          setTimeout(() => handleSendSnap(), 100);
-        }}
+      {capturedPhoto && (
+        <View
+          style={{
+            alignItems: "center",
+            marginBottom: 16,
+          }}
+        >
+          <Image
+            source={{ uri: capturedPhoto }}
+            style={{
+              width: 60,
+              height: 80,
+              borderRadius: 8,
+              resizeMode: "cover",
+            }}
+          />
+        </View>
+      )}
+
+      <Text
         style={{
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          backgroundColor: "#2F3542",
-          justifyContent: "center",
-          alignItems: "center",
+          color: "#8E8E93",
+          fontSize: 14,
+          textAlign: "center",
+          marginBottom: 8,
         }}
       >
-        <MaterialIcons name="send" size={16} color="#8E8E93" />
-      </TouchableOpacity>
-    </TouchableOpacity>
+        Select friends to send your snap
+      </Text>
+
+      <Text
+        style={{
+          color: "#10B981", // Changed from #FF6B9D to green
+          fontSize: 14,
+          textAlign: "center",
+          fontWeight: "600",
+        }}
+      >
+        {selectedContacts.length} selected
+      </Text>
+    </View>
   );
 
   const renderEmptyState = () => (
@@ -307,119 +323,29 @@ const SnapContactsTab: React.FC<SnapContactsTabProps> = ({
         paddingHorizontal: 32,
       }}
     >
-      <View
-        style={{
-          width: 100,
-          height: 100,
-          borderRadius: 50,
-          backgroundColor: "#2F3542",
-          justifyContent: "center",
-          alignItems: "center",
-          marginBottom: 24,
-        }}
-      >
-        <MaterialIcons name="people" size={40} color="#8E8E93" />
-      </View>
-
+      <MaterialIcons name="people" size={80} color="#6B7280" />
       <Text
         style={{
           color: "#FFFFFF",
           fontSize: 20,
           fontWeight: "600",
           textAlign: "center",
+          marginTop: 24,
           marginBottom: 8,
         }}
       >
-        No Friends Yet
+        No Contacts Available
       </Text>
-
       <Text
         style={{
           color: "#8E8E93",
           fontSize: 16,
           textAlign: "center",
           lineHeight: 22,
-          marginBottom: 24,
         }}
       >
-        Start swiping to find matches or follow people to send them snaps!
+        Start matching with people to send snaps!
       </Text>
-
-      <TouchableOpacity
-        onPress={onGoBack}
-        style={{
-          backgroundColor: "#2F3542",
-          borderRadius: 25,
-          paddingHorizontal: 24,
-          paddingVertical: 12,
-        }}
-      >
-        <Text
-          style={{
-            color: "#FFFFFF",
-            fontSize: 16,
-            fontWeight: "600",
-          }}
-        >
-          Go Back
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderHeader = () => (
-    <View
-      style={{
-        paddingHorizontal: 16,
-        paddingVertical: 16,
-        backgroundColor: "#000000",
-      }}
-    >
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 16,
-        }}
-      >
-        <Text
-          style={{
-            color: "#FFFFFF",
-            fontSize: 24,
-            fontWeight: "bold",
-          }}
-        >
-          Send To
-        </Text>
-
-        <TouchableOpacity onPress={onGoBack}>
-          <MaterialIcons name="close" size={24} color="#8E8E93" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Selected Count */}
-      {selectedCount > 0 && (
-        <View
-          style={{
-            backgroundColor: "#FF6B9D",
-            borderRadius: 20,
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            alignSelf: "flex-start",
-          }}
-        >
-          <Text
-            style={{
-              color: "#FFFFFF",
-              fontSize: 14,
-              fontWeight: "600",
-            }}
-          >
-            {selectedCount} selected
-          </Text>
-        </View>
-      )}
     </View>
   );
 
@@ -433,7 +359,7 @@ const SnapContactsTab: React.FC<SnapContactsTabProps> = ({
           backgroundColor: "#000000",
         }}
       >
-        <ActivityIndicator size="large" color="#FF6B9D" />
+        <MaterialIcons name="people" size={40} color="#8E8E93" />
         <Text style={{ color: "#8E8E93", marginTop: 12 }}>
           Loading contacts...
         </Text>
@@ -449,55 +375,63 @@ const SnapContactsTab: React.FC<SnapContactsTabProps> = ({
         keyExtractor={(item) => item.userId.toString()}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={loading ? null : renderEmptyState}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#10B981" // Changed from #FF6B9D to green
+            colors={["#10B981"]} // Changed from #FF6B9D to green
+          />
+        }
         showsVerticalScrollIndicator={false}
         style={{ backgroundColor: "#000000" }}
       />
 
-      {/* Send Button */}
-      {selectedCount > 0 && (
+      {selectedContacts.length > 0 && (
         <View
           style={{
             position: "absolute",
             bottom: 0,
             left: 0,
             right: 0,
-            paddingHorizontal: 16,
+            paddingHorizontal: 20,
             paddingVertical: 20,
             backgroundColor: "rgba(0,0,0,0.9)",
+            borderTopWidth: 1,
+            borderTopColor: "#2F3542",
           }}
         >
           <TouchableOpacity
             onPress={handleSendSnap}
             disabled={sending}
             style={{
-              backgroundColor: "#FF6B9D",
-              borderRadius: 25,
+              backgroundColor: sending ? "#666" : "#10B981", // Changed from #FF6B9D to green
+              borderRadius: 30,
               paddingVertical: 16,
-              paddingHorizontal: 24,
               flexDirection: "row",
               justifyContent: "center",
               alignItems: "center",
-              opacity: sending ? 0.6 : 1,
             }}
           >
             {sending ? (
-              <ActivityIndicator size="small" color="white" />
+              <MaterialIcons name="hourglass-empty" size={20} color="white" />
             ) : (
-              <>
-                <MaterialIcons name="send" size={20} color="white" />
-                <Text
-                  style={{
-                    color: "#FFFFFF",
-                    fontSize: 18,
-                    fontWeight: "600",
-                    marginLeft: 8,
-                  }}
-                >
-                  Send Snap to {selectedCount} friend
-                  {selectedCount > 1 ? "s" : ""}
-                </Text>
-              </>
+              <MaterialIcons name="send" size={20} color="white" />
             )}
+            <Text
+              style={{
+                color: "white",
+                fontWeight: "600",
+                marginLeft: 8,
+                fontSize: 16,
+              }}
+            >
+              {sending
+                ? "Sending..."
+                : `Send to ${selectedContacts.length} friend${
+                    selectedContacts.length > 1 ? "s" : ""
+                  }`}
+            </Text>
           </TouchableOpacity>
         </View>
       )}

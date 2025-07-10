@@ -68,6 +68,7 @@ import DatingDebugScreen from "./src/screens/dating/DatingDebugScreen";
 import PhotoCameraScreen from "./src/screens/messages/PhotoCameraScreen";
 import PhotoViewerScreen from "./src/screens/messages/PhotoViewerScreen";
 import PhotoConversationScreen from "./src/screens/messages/PhotoConversationScreen";
+import MemoriesScreen from "@/screens/messages/MemoriesScreen";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -416,6 +417,11 @@ function AppNavigator() {
             <Stack.Screen
               name="PhotoConversation"
               component={PhotoConversationScreen}
+            />
+            <Stack.Screen
+              name="Memories"
+              component={MemoriesScreen}
+              options={{ headerShown: false }}
             />
           </>
         )}
