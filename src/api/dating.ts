@@ -393,10 +393,10 @@ export const swipeUser = async (
   direction: "LIKE" | "PASS"
 ): Promise<SwipeResponse> => {
   return safeApiCall(async () => {
-    const response = await apiClient.post<SwipeResponse>("/dating/swipe", {
-      targetUserId,
-      direction,
-    });
+    // ✅ FIXED - send as query parameters instead of JSON body
+    const response = await apiClient.post<SwipeResponse>(
+      `/dating/swipe?targetUserId=${targetUserId}&direction=${direction}`
+    );
     return response.data;
   }, "Failed to swipe user");
 };
