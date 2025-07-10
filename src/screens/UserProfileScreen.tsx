@@ -1,4 +1,4 @@
-// src/screens/UserProfileScreen.tsx
+// src/screens/UserProfileScreen.tsx - Updated to match ProfileScreen layout
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -6,17 +6,15 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  FlatList,
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { useSelector, useDispatch } from "react-redux";
+import { useSelector } from "react-redux";
 import { RootState } from "@/redux/store";
 import { PostType } from "@/types/post";
 import Post from "@/components/feed/Post";
-import AuthorAvatar from "@/components/shared/AuthorAvatar";
 import FollowButton from "@/components/profile/FollowButton";
 import MessageButton from "@/components/profile/MessageButton";
 import UserStats from "@/components/profile/UserStats";
@@ -25,9 +23,10 @@ import {
   getFollowStatus,
   getPostsByUsername,
   checkAccountPrivacy,
+  getUserProfile,
 } from "@/api/users";
-import { getUserProfile } from "@/api/users";
-import axios from "axios";
+import { getUserDatingProfile, checkMatchStatus } from "@/api/dating";
+import { DatingProfile } from "@/types/dating";
 
 interface UserProfile {
   id: number;
@@ -43,21 +42,23 @@ interface UserProfile {
   isPrivate?: boolean;
 }
 
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL || "http://192.168.137.1:8080/api";
-
 const UserProfileScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const { username } = route.params as { username: string };
-  const dispatch = useDispatch();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [datingProfile, setDatingProfile] = useState<DatingProfile | null>(
+    null
+  );
   const [posts, setPosts] = useState<PostType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("posts");
+  const [activeTab, setActiveTab] = useState<"social" | "dating">("social");
+  const [isMatched, setIsMatched] = useState(false);
+  const [loadingDatingProfile, setLoadingDatingProfile] = useState(false);
+  const [activePostTab, setActivePostTab] = useState("posts"); // New state for secondary tabs
 
   // Get current user from Redux store
   const currentUser = useSelector((state: RootState) => state.user);
@@ -74,35 +75,24 @@ const UserProfileScreen = () => {
 
     try {
       // Fetch user profile
-      const profileResponse = await axios.get<UserProfile>(
-        `${API_BASE_URL}/users/profile/${username}`,
-        {
-          headers: {
-            "Cache-Control": "no-cache",
-            Pragma: "no-cache",
-          },
-        }
-      );
+      const userProfile = await getUserProfile(username);
+      if (!userProfile) {
+        setError("User not found");
+        return;
+      }
 
-      let userProfile = profileResponse.data;
-
-      // If profile found, also get follow status
-      if (userProfile && userProfile.id) {
+      // Get follow status and privacy info
+      if (userProfile.id) {
         try {
-          // Get follow status
-          const followStatusResponse = await getFollowStatus(userProfile.id);
+          const [followStatus, isPrivate] = await Promise.all([
+            getFollowStatus(userProfile.id),
+            checkAccountPrivacy(userProfile.id),
+          ]);
 
-          // Check if account is private
-          const isPrivate = await checkAccountPrivacy(userProfile.id);
-
-          // Update profile with follow status, counts and privacy
-          userProfile = {
-            ...userProfile,
-            isFollowing: followStatusResponse.isFollowing,
-            followersCount: followStatusResponse.followersCount,
-            followingCount: followStatusResponse.followingCount,
-            isPrivate: isPrivate,
-          };
+          userProfile.isFollowing = followStatus.isFollowing;
+          userProfile.followersCount = followStatus.followersCount;
+          userProfile.followingCount = followStatus.followingCount;
+          userProfile.isPrivate = isPrivate;
         } catch (followErr) {
           console.warn("Could not fetch follow status or privacy:", followErr);
         }
@@ -110,12 +100,10 @@ const UserProfileScreen = () => {
 
       setProfile(userProfile);
 
-      // Fetch user posts
+      // Fetch posts
       try {
         const userPosts = await getPostsByUsername(username);
-
         if (Array.isArray(userPosts)) {
-          // Sort posts by date (newest first)
           const sortedPosts = [...userPosts].sort((a, b) => {
             return (
               new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -129,6 +117,16 @@ const UserProfileScreen = () => {
         console.error("Could not fetch posts:", postsError);
         setPosts([]);
       }
+
+      // Check if matched (for dating profile access)
+      if (userProfile.id && userProfile.id !== currentUser.id) {
+        try {
+          const matched = await checkMatchStatus(userProfile.id);
+          setIsMatched(matched);
+        } catch (matchError) {
+          console.warn("Could not check match status:", matchError);
+        }
+      }
     } catch (err) {
       console.error("Error fetching profile:", err);
       setError("Failed to load user profile");
@@ -138,11 +136,37 @@ const UserProfileScreen = () => {
     }
   };
 
+  const fetchDatingProfile = async () => {
+    if (!profile?.id || loadingDatingProfile) return;
+
+    setLoadingDatingProfile(true);
+    try {
+      const userDatingProfile = await getUserDatingProfile(profile.id);
+      setDatingProfile(userDatingProfile);
+    } catch (error) {
+      console.error("Failed to load dating profile:", error);
+      setDatingProfile(null);
+    } finally {
+      setLoadingDatingProfile(false);
+    }
+  };
+
   useEffect(() => {
     fetchProfileData();
   }, [username]);
 
-  // Handle follow/unfollow profile update
+  // Fetch dating profile when switching to dating tab
+  useEffect(() => {
+    if (
+      activeTab === "dating" &&
+      profile?.id &&
+      !datingProfile &&
+      !loadingDatingProfile
+    ) {
+      fetchDatingProfile();
+    }
+  }, [activeTab, profile?.id]);
+
   const handleFollowChange = (
     isFollowing: boolean,
     followerCount: number,
@@ -158,7 +182,6 @@ const UserProfileScreen = () => {
     }
   };
 
-  // Handle stats update
   const handleStatsChange = (
     newFollowersCount: number,
     newFollowingCount: number
@@ -172,64 +195,261 @@ const UserProfileScreen = () => {
     }
   };
 
-  const handleBack = () => {
-    navigation.goBack();
-  };
-
   const handleRefresh = () => {
     setRefreshing(true);
     fetchProfileData(true);
+    if (activeTab === "dating") {
+      fetchDatingProfile();
+    }
   };
 
-  const renderPost = ({ item }: { item: PostType }) => (
-    <Post key={item.id} post={item} />
-  );
+  const renderDatingProfile = () => {
+    if (loadingDatingProfile) {
+      return (
+        <View className="flex-1 items-center justify-center py-16">
+          <ActivityIndicator size="large" color="#E91E63" />
+          <Text className="text-gray-400 mt-4">Loading dating profile...</Text>
+        </View>
+      );
+    }
 
-  const TabButton = ({ id, label }: { id: string; label: string }) => (
-    <TouchableOpacity
-      onPress={() => setActiveTab(id)}
-      className={`flex-1 py-3 items-center ${
-        activeTab === id ? "border-b-2 border-blue-500" : ""
-      }`}
-    >
-      <Text
-        className={`font-medium ${
-          activeTab === id
-            ? "text-blue-500"
-            : "text-gray-700 dark:text-gray-300"
-        }`}
+    if (!isMatched && !isCurrentUserProfile) {
+      return (
+        <View className="flex-1 items-center justify-center py-16 px-8">
+          <MaterialIcons name="lock" size={80} color="#6B7280" />
+          <Text className="text-white text-xl font-semibold mt-6 mb-2">
+            Dating Profile Locked
+          </Text>
+          <Text className="text-gray-400 text-base text-center leading-6">
+            You can only view dating profiles of people you've matched with. Try
+            swiping in the Dating section to find them!
+          </Text>
+        </View>
+      );
+    }
+
+    if (!datingProfile) {
+      return (
+        <View className="flex-1 items-center justify-center py-16 px-8">
+          <MaterialIcons name="favorite-border" size={80} color="#6B7280" />
+          <Text className="text-white text-xl font-semibold mt-6 mb-2">
+            No Dating Profile
+          </Text>
+          <Text className="text-gray-400 text-base text-center leading-6">
+            This user hasn't created a dating profile yet.
+          </Text>
+        </View>
+      );
+    }
+
+    // Render the dating profile (similar to ProfileScreen)
+    return (
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={{ backgroundColor: "#f8f9fa" }}
       >
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
+        {/* Name and Age */}
+        <View className="mx-4 mt-4">
+          <Text className="text-3xl font-bold text-gray-800 mb-2">
+            {profile?.displayName || profile?.username}, {datingProfile.age}
+          </Text>
+        </View>
+
+        {/* First Photo */}
+        <View className="mx-4 mt-4 bg-white rounded-3xl overflow-hidden shadow-lg">
+          <Image
+            source={{
+              uri:
+                (datingProfile.photos && datingProfile.photos[0]) ||
+                `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.username}`,
+            }}
+            className="w-full h-[450px]"
+            resizeMode="cover"
+          />
+        </View>
+
+        {/* Bio */}
+        <View className="mx-4 mt-4 bg-white rounded-3xl p-6 shadow-lg">
+          <Text className="text-gray-800 text-lg leading-6">
+            {datingProfile.bio}
+          </Text>
+        </View>
+
+        {/* Vitals and Info */}
+        <View className="mx-4 mt-4 bg-white rounded-3xl p-6 shadow-lg">
+          <View className="space-y-3 mb-6">
+            {datingProfile.height && (
+              <View className="flex-row items-center">
+                <MaterialIcons name="height" size={20} color="#666" />
+                <Text className="ml-3 text-gray-800 text-base">
+                  {datingProfile.height}
+                </Text>
+              </View>
+            )}
+
+            {datingProfile.location && (
+              <View className="flex-row items-center">
+                <MaterialIcons name="location-on" size={20} color="#666" />
+                <Text className="ml-3 text-gray-800 text-base">
+                  {datingProfile.location}
+                </Text>
+              </View>
+            )}
+
+            {datingProfile.job && (
+              <View className="flex-row items-center">
+                <MaterialIcons name="work" size={20} color="#666" />
+                <Text className="ml-3 text-gray-800 text-base">
+                  {datingProfile.job}
+                </Text>
+              </View>
+            )}
+
+            {datingProfile.hasChildren && (
+              <View className="flex-row items-center">
+                <MaterialIcons name="child-care" size={20} color="#666" />
+                <Text className="ml-3 text-gray-800 text-base">
+                  {datingProfile.hasChildren}
+                </Text>
+              </View>
+            )}
+
+            {datingProfile.wantChildren && (
+              <View className="flex-row items-center">
+                <MaterialIcons name="favorite" size={20} color="#666" />
+                <Text className="ml-3 text-gray-800 text-base">
+                  {datingProfile.wantChildren}
+                </Text>
+              </View>
+            )}
+
+            {datingProfile.drinking && (
+              <View className="flex-row items-center">
+                <Text className="text-gray-800 text-base mr-3">🍷</Text>
+                <Text className="text-gray-800 text-base">
+                  {datingProfile.drinking}
+                </Text>
+              </View>
+            )}
+
+            {datingProfile.smoking && datingProfile.smoking !== "No" && (
+              <View className="flex-row items-center">
+                <Text className="text-gray-800 text-base mr-3">🚬</Text>
+                <Text className="text-gray-800 text-base">
+                  {datingProfile.smoking}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Lifestyle section */}
+          {(datingProfile.religion ||
+            datingProfile.relationshipType ||
+            datingProfile.lifestyle) && (
+            <View className="space-y-3 mb-6 pt-4 border-t border-gray-200">
+              {datingProfile.religion && (
+                <View className="flex-row items-center">
+                  <MaterialIcons name="church" size={20} color="#666" />
+                  <Text className="ml-3 text-gray-800 text-base">
+                    {datingProfile.religion}
+                  </Text>
+                </View>
+              )}
+
+              {datingProfile.relationshipType && (
+                <View className="flex-row items-center">
+                  <MaterialIcons name="favorite" size={20} color="#666" />
+                  <Text className="ml-3 text-gray-800 text-base">
+                    {datingProfile.relationshipType}
+                  </Text>
+                </View>
+              )}
+
+              {datingProfile.lifestyle && (
+                <View className="flex-row items-center">
+                  <MaterialIcons name="people" size={20} color="#666" />
+                  <Text className="ml-3 text-gray-800 text-base">
+                    {datingProfile.lifestyle}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Looking for */}
+          {datingProfile.lookingFor && (
+            <View className="pt-4 border-t border-gray-200">
+              <Text className="text-gray-600 text-sm font-medium mb-2">
+                Looking for
+              </Text>
+              <Text className="text-gray-800 text-base leading-6">
+                {datingProfile.lookingFor}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Additional Photos with Prompts */}
+        {datingProfile.photos &&
+          datingProfile.photos.length > 1 &&
+          datingProfile.photos.slice(1).map((photo: string, index: number) => (
+            <View key={`photo-section-${index}`}>
+              <View className="mx-4 mt-4 bg-white rounded-3xl overflow-hidden shadow-lg">
+                <Image
+                  source={{ uri: photo }}
+                  className="w-full h-[450px]"
+                  resizeMode="cover"
+                />
+              </View>
+
+              {/* Prompt if available */}
+              {datingProfile.prompts &&
+                datingProfile.prompts[index] &&
+                datingProfile.prompts[index].question && (
+                  <View className="mx-4 mt-4 bg-white rounded-3xl p-6 shadow-lg">
+                    <Text className="text-gray-600 text-sm font-medium mb-2">
+                      {datingProfile.prompts[index].question}
+                    </Text>
+                    <Text className="text-gray-800 text-lg leading-6">
+                      {datingProfile.prompts[index].answer}
+                    </Text>
+                  </View>
+                )}
+            </View>
+          ))}
+
+        <View className="h-20" />
+      </ScrollView>
+    );
+  };
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-background items-center justify-center">
+      <View className="flex-1 bg-black items-center justify-center">
         <ActivityIndicator size="large" color="#3B82F6" />
-        <Text className="mt-4 text-gray-500 dark:text-gray-400">
-          Loading profile...
-        </Text>
+        <Text className="mt-4 text-gray-400">Loading profile...</Text>
       </View>
     );
   }
 
   if (error || !profile) {
     return (
-      <View className="flex-1 bg-background">
-        <View className="flex-row items-center p-4 border-b border-gray-200 dark:border-gray-700">
-          <TouchableOpacity onPress={handleBack} className="mr-4">
-            <MaterialIcons name="arrow-back" size={24} color="gray" />
+      <View className="flex-1 bg-black">
+        <View className="flex-row items-center p-4 border-b border-gray-700">
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            className="mr-4"
+          >
+            <MaterialIcons name="arrow-back" size={24} color="white" />
           </TouchableOpacity>
-          <Text className="text-lg font-semibold">Profile</Text>
+          <Text className="text-lg font-semibold text-white">Profile</Text>
         </View>
         <View className="flex-1 items-center justify-center p-6">
           <Text className="text-red-500 text-center">
             {error || "User not found"}
           </Text>
           <TouchableOpacity
-            onPress={handleBack}
+            onPress={() => navigation.goBack()}
             className="mt-4 bg-blue-500 px-6 py-2 rounded-lg"
           >
             <Text className="text-white font-medium">Go Back</Text>
@@ -240,151 +460,285 @@ const UserProfileScreen = () => {
   }
 
   return (
-    <View className="flex-1 bg-background">
-      {/* Header */}
-      <View className="bg-white dark:bg-gray-800 pt-12 pb-4 px-4 border-b border-gray-200 dark:border-gray-700">
-        <View className="flex-row items-center">
-          <TouchableOpacity onPress={handleBack} className="mr-4">
-            <MaterialIcons name="arrow-back" size={24} color="gray" />
-          </TouchableOpacity>
-          <Text className="text-lg font-semibold text-gray-900 dark:text-white">
-            {profile.displayName || profile.username}
-          </Text>
+    <View
+      className="flex-1"
+      style={{
+        backgroundColor: activeTab === "dating" ? "#f8f9fa" : "#000000",
+      }}
+    >
+      {/* Header - Match ProfileScreen exactly */}
+      <View
+        className="border-b"
+        style={{
+          backgroundColor:
+            activeTab === "dating" ? "#ffffff" : "rgba(0,0,0,0.95)",
+          borderBottomColor: activeTab === "dating" ? "#e5e7eb" : "#374151",
+        }}
+      >
+        <View className="flex-row justify-between items-center px-4 py-3 pt-12">
+          <View className="flex-1">
+            <Text
+              className="text-xl font-bold"
+              style={{ color: activeTab === "dating" ? "#000000" : "#ffffff" }}
+            >
+              {profile.displayName || profile.username}
+            </Text>
+            <Text
+              className="text-sm"
+              style={{ color: activeTab === "dating" ? "#6b7280" : "#9ca3af" }}
+            >
+              @{profile.username}
+            </Text>
+          </View>
+          {/* No settings button for other users */}
         </View>
+
+        {/* Tab Selector - Only show if user has dating profile or is matched */}
+        {(isMatched || isCurrentUserProfile || activeTab === "dating") && (
+          <View className="flex-row px-4 pb-3">
+            <TouchableOpacity
+              onPress={() => setActiveTab("social")}
+              className="mr-8 pb-2"
+              style={{
+                borderBottomWidth: activeTab === "social" ? 2 : 0,
+                borderBottomColor:
+                  activeTab === "social" ? "#3b82f6" : "transparent",
+              }}
+            >
+              <Text
+                className="text-base font-medium"
+                style={{
+                  color:
+                    activeTab === "social"
+                      ? activeTab === "dating"
+                        ? "#000000"
+                        : "#ffffff"
+                      : activeTab === "dating"
+                      ? "#6b7280"
+                      : "#9ca3af",
+                }}
+              >
+                Social
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setActiveTab("dating")}
+              className="pb-2"
+              style={{
+                borderBottomWidth: activeTab === "dating" ? 2 : 0,
+                borderBottomColor:
+                  activeTab === "dating" ? "#ec4899" : "transparent",
+              }}
+            >
+              <Text
+                className="text-base font-medium"
+                style={{
+                  color:
+                    activeTab === "dating"
+                      ? activeTab === "dating"
+                        ? "#000000"
+                        : "#ffffff"
+                      : activeTab === "dating"
+                      ? "#6b7280"
+                      : "#9ca3af",
+                }}
+              >
+                Dating {isMatched && <Text className="text-xs">✨</Text>}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
-      <ScrollView
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Profile Header */}
-        <View className="bg-white dark:bg-gray-900 p-6">
-          <View className="flex-row items-start">
-            {/* Avatar */}
-            <View className="mr-4">
-              <Image
-                source={{
-                  uri:
-                    profile.profileImageUrl ||
-                    `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`,
-                }}
-                className="w-20 h-20 rounded-full"
+      {/* Content */}
+      {activeTab === "social" ? (
+        <ScrollView
+          className="flex-1"
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
+        >
+          {/* Profile Section - Match ProfileScreen layout exactly */}
+          <View className="px-4 py-6">
+            <View className="flex-row justify-between items-start mb-6">
+              <View className="flex-1 mr-4">
+                <Image
+                  source={{
+                    uri:
+                      profile.profileImageUrl ||
+                      `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`,
+                  }}
+                  className="w-20 h-20 rounded-full border-2 border-gray-700 mb-4"
+                />
+                <View className="mb-3">
+                  <Text className="text-xl font-bold text-white mb-1">
+                    {profile.displayName || profile.username}
+                  </Text>
+                  <Text className="text-gray-400 text-base">
+                    @{profile.username}
+                  </Text>
+                </View>
+                {profile.bio && (
+                  <Text className="text-white text-sm leading-5 mb-3">
+                    {profile.bio}
+                  </Text>
+                )}
+                <View className="flex-row items-center">
+                  <MaterialIcons
+                    name="calendar-today"
+                    size={14}
+                    color="#71767b"
+                  />
+                  <Text className="ml-2 text-sm text-gray-400">
+                    Joined{" "}
+                    {profile.joinDate
+                      ? new Date(profile.joinDate).toLocaleDateString("en-US", {
+                          month: "long",
+                          year: "numeric",
+                        })
+                      : "Recently"}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Action Buttons - Replace Edit Profile with Follow/Message */}
+              {!isAuthenticated ? (
+                <TouchableOpacity
+                  onPress={() => navigation.navigate("Login")}
+                  className="border border-gray-600 px-4 py-2 rounded-full"
+                >
+                  <Text className="text-white text-sm font-medium">Log in</Text>
+                </TouchableOpacity>
+              ) : isCurrentUserProfile ? (
+                <TouchableOpacity
+                  onPress={() => navigation.navigate("Settings")}
+                  className="border border-gray-600 px-4 py-2 rounded-full"
+                >
+                  <Text className="text-white text-sm font-medium">
+                    Edit profile
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View className="space-y-2">
+                  <FollowButton
+                    userId={profile.id}
+                    initialIsFollowing={profile.isFollowing}
+                    onFollowChange={handleFollowChange}
+                  />
+                  <MessageButton
+                    username={profile.username}
+                    userId={profile.id}
+                  />
+                </View>
+              )}
+            </View>
+
+            {/* Stats */}
+            <View className="mb-6">
+              <UserStats
+                userId={profile.id}
+                postsCount={posts.length}
+                followersCount={profile.followersCount}
+                followingCount={profile.followingCount}
+                onFollowChange={handleStatsChange}
               />
             </View>
 
-            {/* User Info */}
-            <View className="flex-1">
-              <View className="flex-row items-center justify-between">
-                <View>
-                  <Text className="text-xl font-bold text-gray-900 dark:text-white">
-                    {profile.displayName || profile.username}
-                  </Text>
-                  <View className="flex-row items-center">
-                    <Text className="text-gray-500 dark:text-gray-400">
-                      @{profile.username}
-                    </Text>
-                    {profile.isPrivate && (
-                      <View className="ml-2 flex-row items-center bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">
-                        <MaterialIcons name="lock" size={12} color="#6B7280" />
-                        <Text className="text-xs text-gray-600 dark:text-gray-400 ml-1">
-                          Private
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-
-                {/* Action Buttons */}
-                {!isAuthenticated ? (
-                  <TouchableOpacity
-                    onPress={() => (navigation as any).navigate("Login")}
-                    className="bg-blue-500 px-4 py-2 rounded-lg"
-                  >
-                    <Text className="text-white font-medium">Log in</Text>
-                  </TouchableOpacity>
-                ) : isCurrentUserProfile ? (
-                  <TouchableOpacity
-                    onPress={() => (navigation as any).navigate("Settings")}
-                    className="bg-gray-200 dark:bg-gray-700 px-4 py-2 rounded-lg"
-                  >
-                    <Text className="text-gray-700 dark:text-gray-300 font-medium">
-                      Edit Profile
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
-                  <View className="flex-row space-x-2">
-                    <FollowButton
-                      userId={profile.id}
-                      initialIsFollowing={profile.isFollowing}
-                      onFollowChange={handleFollowChange}
-                    />
-                    <MessageButton
-                      username={profile.username}
-                      userId={profile.id}
-                    />
-                  </View>
-                )}
-              </View>
-
-              {/* Bio */}
-              {profile.bio && (
-                <Text className="text-gray-700 dark:text-gray-300 mt-3">
-                  {profile.bio}
-                </Text>
-              )}
-
-              {/* User Badges */}
+            {/* Badges Section */}
+            <View className="mb-6">
               <UserBadges
                 userId={profile.id}
                 isCurrentUser={isCurrentUserProfile}
               />
-
-              {/* Stats */}
-              <UserStats
-                userId={profile.id}
-                postsCount={profile.postsCount}
-                followersCount={profile.followersCount}
-                followingCount={profile.followingCount}
-                className="mt-4"
-                onFollowChange={handleStatsChange}
-              />
-
-              {/* Join Date */}
-              {profile.joinDate && (
-                <View className="flex-row items-center mt-3">
-                  <MaterialIcons
-                    name="calendar-today"
-                    size={16}
-                    color="#6B7280"
-                  />
-                  <Text className="ml-1 text-gray-500 dark:text-gray-400 text-sm">
-                    Joined {new Date(profile.joinDate).toLocaleDateString()}
-                  </Text>
-                </View>
-              )}
             </View>
           </View>
-        </View>
 
-        {/* Tabs */}
-        <View className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
-          <View className="flex-row">
-            <TabButton id="posts" label="Posts" />
-            <TabButton id="comments" label="Comments" />
-            <TabButton id="followers" label="Followers" />
-            <TabButton id="following" label="Following" />
+          {/* Secondary Navigation Tabs - Match ProfileScreen exactly */}
+          <View className="border-b border-gray-800">
+            <View className="px-4">
+              <View className="flex-row">
+                <TouchableOpacity
+                  className="mr-8 pb-4"
+                  onPress={() => setActivePostTab("posts")}
+                >
+                  <Text
+                    className={`font-semibold text-base ${
+                      activePostTab === "posts" ? "text-white" : "text-gray-400"
+                    }`}
+                  >
+                    Posts
+                  </Text>
+                  {activePostTab === "posts" && (
+                    <View className="mt-2 h-0.5 w-12 bg-blue-500 rounded-full" />
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className="mr-8 pb-4"
+                  onPress={() => setActivePostTab("replies")}
+                >
+                  <Text
+                    className={`font-medium text-base ${
+                      activePostTab === "replies"
+                        ? "text-white"
+                        : "text-gray-400"
+                    }`}
+                  >
+                    Replies
+                  </Text>
+                  {activePostTab === "replies" && (
+                    <View className="mt-2 h-0.5 w-12 bg-blue-500 rounded-full" />
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className="mr-8 pb-4"
+                  onPress={() => setActivePostTab("media")}
+                >
+                  <Text
+                    className={`font-medium text-base ${
+                      activePostTab === "media" ? "text-white" : "text-gray-400"
+                    }`}
+                  >
+                    Media
+                  </Text>
+                  {activePostTab === "media" && (
+                    <View className="mt-2 h-0.5 w-12 bg-blue-500 rounded-full" />
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className="pb-4"
+                  onPress={() => setActivePostTab("likes")}
+                >
+                  <Text
+                    className={`font-medium text-base ${
+                      activePostTab === "likes" ? "text-white" : "text-gray-400"
+                    }`}
+                  >
+                    Likes
+                  </Text>
+                  {activePostTab === "likes" && (
+                    <View className="mt-2 h-0.5 w-12 bg-blue-500 rounded-full" />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
-        </View>
 
-        {/* Tab Content */}
-        <View className="bg-gray-50 dark:bg-gray-900">
-          {activeTab === "posts" &&
-            (isAuthenticated ? (
+          {/* Posts Section */}
+          <View className="bg-black">
+            {/* Section Title */}
+            <View className="px-4 py-4">
+              <Text className="text-white text-xl font-bold">
+                {profile.displayName || profile.username}'s Posts
+              </Text>
+            </View>
+
+            {/* Posts Content */}
+            {isAuthenticated ? (
               posts.length > 0 ? (
                 posts.map((post) => (
-                  <View key={post.id} className="mb-4">
+                  <View key={post.id}>
                     <Post post={post} />
                   </View>
                 ))
@@ -394,21 +748,25 @@ const UserProfileScreen = () => {
                   !profile.isFollowing &&
                   !isCurrentUserProfile ? (
                     <>
-                      <MaterialIcons name="lock" size={48} color="#6B7280" />
-                      <Text className="text-lg font-medium text-gray-900 dark:text-white mt-4">
+                      <MaterialIcons name="lock" size={48} color="#71767b" />
+                      <Text className="text-lg font-medium text-white mt-4">
                         Private Account
                       </Text>
-                      <Text className="text-gray-500 dark:text-gray-400 text-center mt-2">
+                      <Text className="text-gray-400 text-center mt-2">
                         Follow this user to see their posts.
                       </Text>
                     </>
                   ) : (
                     <>
-                      <MaterialIcons name="article" size={48} color="#6B7280" />
-                      <Text className="text-lg font-medium text-gray-900 dark:text-white mt-4">
+                      <MaterialIcons
+                        name="post-add"
+                        size={48}
+                        color="#71767b"
+                      />
+                      <Text className="text-lg font-medium text-white mt-4">
                         No posts yet
                       </Text>
-                      <Text className="text-gray-500 dark:text-gray-400 text-center mt-2">
+                      <Text className="text-gray-400 text-center mt-2">
                         This user hasn't posted anything.
                       </Text>
                     </>
@@ -417,40 +775,30 @@ const UserProfileScreen = () => {
               )
             ) : (
               <View className="p-8 items-center">
-                <MaterialIcons name="login" size={48} color="#6B7280" />
-                <Text className="text-lg font-medium text-gray-900 dark:text-white mt-4">
+                <MaterialIcons name="login" size={48} color="#71767b" />
+                <Text className="text-lg font-medium text-white mt-4">
                   Login Required
                 </Text>
-                <Text className="text-gray-500 dark:text-gray-400 text-center mt-2">
+                <Text className="text-gray-400 text-center mt-2">
                   You need to be logged in to view this user's posts.
                 </Text>
                 <TouchableOpacity
-                  onPress={() => (navigation as any).navigate("Login")}
+                  onPress={() => navigation.navigate("Login")}
                   className="bg-blue-500 px-6 py-3 rounded-lg mt-4"
                 >
                   <Text className="text-white font-medium">Log In</Text>
                 </TouchableOpacity>
               </View>
-            ))}
+            )}
+          </View>
 
-          {activeTab !== "posts" && (
-            <View className="p-8 items-center">
-              <Text className="text-lg font-medium text-gray-900 dark:text-white">
-                {activeTab === "comments"
-                  ? "Comments Coming Soon"
-                  : activeTab === "followers"
-                  ? "Followers"
-                  : "Following"}
-              </Text>
-              <Text className="text-gray-500 dark:text-gray-400 text-center mt-2">
-                {activeTab === "comments"
-                  ? "This feature is being developed."
-                  : "Click on the count in the stats to see the complete list."}
-              </Text>
-            </View>
-          )}
-        </View>
-      </ScrollView>
+          {/* Bottom spacing for tab bar */}
+          <View className="h-20" />
+        </ScrollView>
+      ) : (
+        // Dating Profile Content
+        renderDatingProfile()
+      )}
     </View>
   );
 };

@@ -466,3 +466,83 @@ export const isDatingReady = async (): Promise<{
     };
   }
 };
+
+/**
+ * Get another user's dating profile (only accessible if matched or if profile is public)
+ */
+export const getUserDatingProfile = async (
+  userId: number
+): Promise<DatingProfile | null> => {
+  return safeApiCall(async () => {
+    try {
+      const response = await apiClient.get<DatingProfile>(
+        `/dating/profile/user/${userId}`
+      );
+
+      // Parse JSON fields if they exist
+      if (response.data && response.data.prompts) {
+        response.data.prompts = response.data.prompts.map((promptStr: any) => {
+          try {
+            return typeof promptStr === "string"
+              ? JSON.parse(promptStr)
+              : promptStr;
+          } catch {
+            return { question: "", answer: "" };
+          }
+        });
+      }
+
+      if (response.data && response.data.interests) {
+        response.data.interests = response.data.interests.map(
+          (interestStr: any) => {
+            try {
+              return typeof interestStr === "string"
+                ? JSON.parse(interestStr)
+                : interestStr;
+            } catch {
+              return "";
+            }
+          }
+        );
+      }
+
+      if (response.data && response.data.virtues) {
+        response.data.virtues = response.data.virtues.map((virtueStr: any) => {
+          try {
+            return typeof virtueStr === "string"
+              ? JSON.parse(virtueStr)
+              : virtueStr;
+          } catch {
+            return { category: "", value: "" };
+          }
+        });
+      }
+
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        return null; // No dating profile found
+      }
+      if (error.response?.status === 403) {
+        throw new Error("You can only view dating profiles of matched users");
+      }
+      throw error;
+    }
+  }, "Failed to get user's dating profile");
+};
+
+/**
+ * Check if current user is matched with another user
+ */
+export const checkMatchStatus = async (userId: number): Promise<boolean> => {
+  return safeApiCall(async () => {
+    try {
+      const response = await apiClient.get<{ isMatched: boolean }>(
+        `/dating/match-status/${userId}`
+      );
+      return response.data.isMatched;
+    } catch (error) {
+      return false; // If can't check, assume not matched
+    }
+  }, "Failed to check match status");
+};
