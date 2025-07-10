@@ -156,18 +156,13 @@ const DatingScreen = () => {
         <View className="flex-row items-center justify-between">
           <Text className="text-xl font-bold text-white">Dating</Text>
 
-          <View className="flex-row">
-            <TouchableOpacity
-              onPress={() => navigation.navigate("DatingSetup")}
-              className="p-2 mr-2"
-            >
-              <MaterialIcons name="settings" size={24} color="#9CA3AF" />
-            </TouchableOpacity>
-
-            <TouchableOpacity className="p-2">
-              <MaterialIcons name="filter-list" size={24} color="#9CA3AF" />
-            </TouchableOpacity>
-          </View>
+          {/* Only the settings icon - filter icon removed */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate("DatingSettings")}
+            className="p-2"
+          >
+            <MaterialIcons name="settings" size={24} color="#9CA3AF" />
+          </TouchableOpacity>
         </View>
 
         {/* Tab Selector */}

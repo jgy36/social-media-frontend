@@ -1,11 +1,10 @@
-// src/components/feed/PostList.tsx
+// src/components/feed/PostList.tsx - React Native Compatible Version
 import { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   FlatList,
-  Alert,
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
@@ -38,6 +37,10 @@ const PostList: React.FC<PostListProps> = ({ activeTab }) => {
 
   const loadPosts = useCallback(
     async (isRefresh = false) => {
+      console.log(
+        `🔄 PostList - Loading posts for tab: ${activeTab}, refresh: ${isRefresh}`
+      );
+
       // If we're on protected tabs with no auth, show appropriate message instead of redirecting
       if (
         (!token && activeTab === "following") ||
@@ -67,8 +70,9 @@ const PostList: React.FC<PostListProps> = ({ activeTab }) => {
       }
 
       try {
-        console.log(`Fetching posts from endpoint: ${endpoint}`);
+        console.log(`📡 PostList - Fetching posts from endpoint: ${endpoint}`);
         const data = await posts.getPosts(endpoint);
+        console.log(`📊 PostList - Received ${data.length} posts`);
 
         const isFallbackData =
           data.length > 0 &&
@@ -90,9 +94,18 @@ const PostList: React.FC<PostListProps> = ({ activeTab }) => {
           setNoJoinedCommunities(false);
         }
 
-        setPosts(data);
+        // Sort posts by creation date (newest first)
+        const sortedPosts = data.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+
+        setPosts(sortedPosts);
+        console.log(
+          `✅ PostList - Successfully loaded ${sortedPosts.length} posts`
+        );
       } catch (err) {
-        console.error("Failed to load posts:", err);
+        console.error("❌ PostList - Failed to load posts:", err);
         setError("Failed to load posts. Please try again later.");
       } finally {
         setLoading(false);
@@ -102,15 +115,34 @@ const PostList: React.FC<PostListProps> = ({ activeTab }) => {
     [activeTab, token, joinedCommunities]
   );
 
+  // Load posts when component mounts or dependencies change
   useEffect(() => {
+    console.log(`🎯 PostList - useEffect triggered for tab: ${activeTab}`);
     loadPosts();
   }, [activeTab, token, loadPosts]);
 
+  // React Native compatible refresh mechanism
+  useEffect(() => {
+    const handleRefreshFeed = () => {
+      console.log("🔄 PostList - Received refreshFeed event");
+      loadPosts(true);
+    };
+
+    // Set up a global refresh function for React Native
+    global.refreshPostList = handleRefreshFeed;
+
+    return () => {
+      delete global.refreshPostList;
+    };
+  }, [loadPosts]);
+
   const handleRetry = () => {
+    console.log("🔄 PostList - Manual retry triggered");
     loadPosts();
   };
 
   const handleRefresh = () => {
+    console.log("🔄 PostList - Pull to refresh triggered");
     setRefreshing(true);
     loadPosts(true);
   };

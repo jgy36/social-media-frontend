@@ -35,11 +35,13 @@ export type RootStackParamList = {
   SwipeScreen: undefined;
   MatchDetail: { matchId: number };
   DatingDebug: undefined; // ADD THIS LINE
+  DatingSettings: undefined;
 
   // Photo Message screens
   PhotoCamera: { recipientId?: number };
   PhotoViewer: { photoMessageId: number };
   PhotoConversation: { userId: number };
+  Memories: undefined;
 
   // Hashtag screens
   Hashtag: { tag: string };

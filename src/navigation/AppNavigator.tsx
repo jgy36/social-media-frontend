@@ -37,6 +37,7 @@ import MatchDetailScreen from "../screens/dating/MatchDetailScreen";
 import PhotoCameraScreen from "../screens/messages/PhotoCameraScreen";
 import PhotoViewerScreen from "../screens/messages/PhotoViewerScreen";
 import PhotoConversationScreen from "../screens/messages/PhotoConversationScreen";
+import DatingSettingsScreen from "@/screens/DatingSettingsScreen";
 
 import { RootStackParamList, TabParamList } from "./types";
 
@@ -175,6 +176,11 @@ const AppNavigator = () => {
             />
             <Stack.Screen name="SwipeScreen" component={SwipeScreen} />
             <Stack.Screen name="MatchDetail" component={MatchDetailScreen} />
+            <Stack.Screen
+              name="DatingSettings"
+              component={DatingSettingsScreen}
+              options={{ headerShown: false }}
+            />
 
             {/* Photo Message screens */}
             <Stack.Screen

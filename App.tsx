@@ -63,6 +63,7 @@ import DatingSetupScreen from "./src/screens/dating/DatingSetupScreen";
 import SwipeScreen from "./src/screens/dating/SwipeScreen";
 import MatchDetailScreen from "./src/screens/dating/MatchDetailScreen";
 import DatingDebugScreen from "./src/screens/dating/DatingDebugScreen";
+import DatingSettingsScreen from "./src/screens/DatingSettingsScreen";
 
 // Photo Message screens
 import PhotoCameraScreen from "./src/screens/messages/PhotoCameraScreen";
@@ -385,6 +386,14 @@ function AppNavigator() {
                 title: "Complete Your Dating Profile",
                 headerStyle: { backgroundColor: "#000" },
                 headerTintColor: "#fff",
+              }}
+            />
+            {/* ADD THIS NEW SCREEN */}
+            <Stack.Screen
+              name="DatingSettings"
+              component={DatingSettingsScreen}
+              options={{
+                headerShown: false, // Since your DatingSettings screen handles its own header
               }}
             />
             <Stack.Screen name="SwipeScreen" component={SwipeScreen} />

@@ -1,5 +1,5 @@
-// src/screens/FeedScreen.tsx - Modern X-style Design
-import React, { useState, useEffect } from "react";
+// src/screens/FeedScreen.tsx - Fixed Modal Layout
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   SafeAreaView,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -16,19 +15,30 @@ import { RootState } from "../redux/store";
 import PostList from "../components/feed/PostList";
 import PostForm from "../components/feed/PostForm";
 
+type FeedTab = "for-you" | "following" | "communities";
+
 const FeedScreen = () => {
-  const [activeTab, setActiveTab] = useState<
-    "for-you" | "following" | "communities"
-  >("for-you");
+  const [activeTab, setActiveTab] = useState<FeedTab>("for-you");
   const [isPostModalVisible, setIsPostModalVisible] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
   const user = useSelector((state: RootState) => state.user);
 
   // Function to handle post creation and refresh feed
   const handlePostCreated = () => {
+    console.log(
+      "🎉 FeedScreen - Post created, closing modal and refreshing feed"
+    );
+
     setIsPostModalVisible(false);
-    // The PostList component will handle refreshing via the refreshFeed event
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("refreshFeed"));
+
+    // Trigger refresh by updating the refresh counter
+    setRefreshTrigger((prev) => prev + 1);
+
+    // Call the global refresh function for React Native
+    if (global.refreshPostList) {
+      console.log("🔄 FeedScreen - Calling global refresh function");
+      global.refreshPostList();
     }
   };
 
@@ -49,12 +59,12 @@ const FeedScreen = () => {
             <Text className="text-xl font-bold text-white">Home</Text>
           </View>
 
-          {/* Tabs - X-style compact design */}
+          {/* Tabs - X-style compact design with proper styling */}
           <View className="flex-row">
             {tabs.map((tab) => (
               <TouchableOpacity
                 key={tab.id}
-                onPress={() => setActiveTab(tab.id as any)}
+                onPress={() => setActiveTab(tab.id as FeedTab)}
                 className="flex-1 pb-3 pt-1"
               >
                 <Text
@@ -65,7 +75,7 @@ const FeedScreen = () => {
                 >
                   {tab.label}
                 </Text>
-                {/* Active indicator */}
+                {/* Active indicator - using style prop for dynamic styling */}
                 <View
                   className="mt-3 h-1 rounded-full mx-auto"
                   style={{
@@ -79,9 +89,12 @@ const FeedScreen = () => {
           </View>
         </View>
 
-        {/* Posts List */}
+        {/* Posts List with refresh trigger */}
         <View className="flex-1">
-          <PostList activeTab={activeTab} />
+          <PostList
+            activeTab={activeTab}
+            key={`${activeTab}-${refreshTrigger}`}
+          />
         </View>
 
         {/* Floating Action Button - X-style */}
@@ -95,18 +108,23 @@ const FeedScreen = () => {
             shadowRadius: 8,
             elevation: 8,
           }}
-          onPress={() => setIsPostModalVisible(true)}
+          onPress={() => {
+            console.log("📝 FeedScreen - Opening post creation modal");
+            setIsPostModalVisible(true);
+          }}
         >
           <MaterialIcons name="add" size={24} color="white" />
         </TouchableOpacity>
 
-        {/* Create Post Modal - X-style */}
+        {/* Create Post Modal - Fixed Layout */}
         <Modal
           visible={isPostModalVisible}
           animationType="slide"
           transparent={true}
-          onRequestClose={() => setIsPostModalVisible(false)}
-          presentationStyle="pageSheet"
+          onRequestClose={() => {
+            console.log("❌ FeedScreen - Closing post modal without creating");
+            setIsPostModalVisible(false);
+          }}
         >
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -116,11 +134,17 @@ const FeedScreen = () => {
               className="flex-1 justify-end"
               style={{ backgroundColor: "rgba(0, 0, 0, 0.4)" }}
             >
-              <View className="bg-black rounded-t-2xl border-t border-gray-800">
+              <View
+                className="bg-black rounded-t-2xl border-t border-gray-800"
+                style={{ maxHeight: "80%", minHeight: "60%" }}
+              >
                 {/* Modal Header - X-style */}
                 <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-800">
                   <TouchableOpacity
-                    onPress={() => setIsPostModalVisible(false)}
+                    onPress={() => {
+                      console.log("❌ FeedScreen - Cancel button pressed");
+                      setIsPostModalVisible(false);
+                    }}
                     className="px-2 py-1"
                   >
                     <Text className="text-white text-base">Cancel</Text>
@@ -133,15 +157,19 @@ const FeedScreen = () => {
                   <View className="w-12" />
                 </View>
 
-                {/* Modal Body */}
-                <View className="px-4 py-4" style={{ maxHeight: 400 }}>
-                  <ScrollView
-                    showsVerticalScrollIndicator={false}
-                    className="flex-1"
-                    bounces={false}
-                  >
-                    <PostForm onPostCreated={handlePostCreated} />
-                  </ScrollView>
+                {/* Modal Body - Fixed layout */}
+                <View className="flex-1 px-4 py-4">
+                  {/* Debug info in development */}
+                  {__DEV__ && (
+                    <View className="bg-blue-900/20 border border-blue-800 rounded-lg p-2 mb-2">
+                      <Text className="text-blue-200 text-xs">
+                        Debug: User={user.username || "Not logged in"}, Token=
+                        {user.token ? "Present" : "Missing"}
+                      </Text>
+                    </View>
+                  )}
+
+                  <PostForm onPostCreated={handlePostCreated} />
                 </View>
               </View>
             </View>

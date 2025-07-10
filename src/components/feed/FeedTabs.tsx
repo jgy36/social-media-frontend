@@ -1,4 +1,4 @@
-// src/components/feed/FeedTabs.tsx
+// src/components/feed/FeedTabs.tsx - Fixed styling according to NativeWind guidelines
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 
@@ -24,18 +24,17 @@ const FeedTabs: React.FC<FeedTabsProps> = ({ activeTab, onTabChange }) => {
             onPress={() =>
               onTabChange(tab.id as "for-you" | "following" | "communities")
             }
-            className={`flex-1 py-3 px-4 rounded-lg ${
-              activeTab === tab.id
-                ? "bg-white dark:bg-gray-800 shadow-sm"
-                : "bg-transparent"
-            }`}
+            className="flex-1 py-3 px-4 rounded-lg"
+            style={{
+              backgroundColor: activeTab === tab.id ? "#ffffff" : "transparent",
+              shadowOpacity: activeTab === tab.id ? 0.1 : 0,
+            }}
           >
             <Text
-              className={`text-center text-lg font-medium ${
-                activeTab === tab.id
-                  ? "text-gray-900 dark:text-white"
-                  : "text-gray-600 dark:text-gray-400"
-              }`}
+              className="text-center text-lg font-medium"
+              style={{
+                color: activeTab === tab.id ? "#111827" : "#6B7280",
+              }}
             >
               {tab.label}
             </Text>
