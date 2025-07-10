@@ -1,11 +1,11 @@
-// src/api/privacySettings.ts
+// src/api/privacySettings.ts - FIXED VERSION
 import { apiClient, safeApiCall } from "./apiClient";
 
 /**
  * Interface for privacy settings (updated for social media + dating app)
  */
 export interface PrivacySettings {
-  publicProfile: boolean;
+  publicProfile: boolean; // This should map to 'public_profile' in DB
   showPoliticalAffiliation: boolean;
   showPostHistory: boolean;
   showVotingRecord: boolean;
@@ -14,10 +14,10 @@ export interface PrivacySettings {
   allowSearchIndexing: boolean;
   dataSharing: boolean;
 
-  // New dating/match privacy settings
+  // Dating/match privacy settings
   showPostsToMatches: boolean;
   maxPostsForMatches: number;
-  matchPostsTimeLimit: number; // days
+  matchPostsTimeLimit: number;
   showFollowersToMatches: boolean;
   showFollowingToMatches: boolean;
 }
@@ -26,7 +26,7 @@ export interface PrivacySettings {
  * Default privacy settings (updated)
  */
 export const defaultPrivacySettings: PrivacySettings = {
-  publicProfile: true,
+  publicProfile: true, // Make sure this is explicitly set
   showPoliticalAffiliation: false,
   showPostHistory: true,
   showVotingRecord: false,
@@ -44,15 +44,59 @@ export const defaultPrivacySettings: PrivacySettings = {
 };
 
 /**
- * Get the user's privacy settings
+ * Initialize privacy settings for a new user
+ * THIS IS THE KEY MISSING FUNCTION
+ */
+export const initializePrivacySettings = async (): Promise<{
+  success: boolean;
+  message?: string;
+}> => {
+  return safeApiCall(async () => {
+    console.log(
+      "Initializing privacy settings with defaults:",
+      defaultPrivacySettings
+    );
+
+    const response = await apiClient.post<{
+      success: boolean;
+      message?: string;
+    }>("/users/privacy-settings/initialize", defaultPrivacySettings);
+
+    console.log("Privacy settings initialization response:", response.data);
+    return response.data;
+  }, "Failed to initialize privacy settings");
+};
+
+/**
+ * Get the user's privacy settings with fallback to defaults
  * @returns The user's privacy settings
  */
 export const getPrivacySettings = async (): Promise<PrivacySettings> => {
   return safeApiCall(async () => {
-    const response = await apiClient.get<PrivacySettings>(
-      "/users/privacy-settings"
-    );
-    return response.data;
+    try {
+      const response = await apiClient.get<PrivacySettings>(
+        "/users/privacy-settings"
+      );
+      return response.data;
+    } catch (error: any) {
+      // If privacy settings don't exist (404 or similar), initialize them
+      if (error.response?.status === 404 || error.response?.status === 500) {
+        console.log("Privacy settings not found, initializing with defaults");
+
+        const initResult = await initializePrivacySettings();
+        if (initResult.success) {
+          // Try again after initialization
+          const response = await apiClient.get<PrivacySettings>(
+            "/users/privacy-settings"
+          );
+          return response.data;
+        } else {
+          console.warn("Failed to initialize privacy settings, using defaults");
+          return defaultPrivacySettings;
+        }
+      }
+      throw error;
+    }
   }, "Failed to get privacy settings");
 };
 
@@ -65,12 +109,41 @@ export const updatePrivacySettings = async (
   settings: PrivacySettings
 ): Promise<{ success: boolean; message?: string }> => {
   return safeApiCall(async () => {
+    // Ensure all required fields are present
+    const completeSettings = {
+      ...defaultPrivacySettings,
+      ...settings,
+    };
+
     const response = await apiClient.put<{
       success: boolean;
       message?: string;
-    }>("/users/privacy-settings", settings);
+    }>("/users/privacy-settings", completeSettings);
     return response.data;
   }, "Failed to update privacy settings");
+};
+
+/**
+ * Ensure privacy settings exist for current user
+ * Call this after user registration or login
+ */
+export const ensurePrivacySettingsExist = async (): Promise<boolean> => {
+  try {
+    console.log("Ensuring privacy settings exist for current user");
+
+    // Try to get existing settings
+    const settings = await getPrivacySettings();
+
+    if (settings) {
+      console.log("Privacy settings found or created successfully");
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error("Failed to ensure privacy settings exist:", error);
+    return false;
+  }
 };
 
 /**

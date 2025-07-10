@@ -1,7 +1,11 @@
+// src/screens/SettingsScreen.tsx
 import React, { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { useDispatch } from "react-redux";
+import { AppDispatch } from "@/redux/store";
+import { logoutUser } from "@/redux/slices/userSlice";
 
 import ProfileSettings from "../components/settings/ProfileSettings";
 import AccountSettings from "../components/settings/AccountSettings";
@@ -11,8 +15,37 @@ import SecuritySettings from "../components/settings/SecuritySettings";
 
 const SettingsScreen = () => {
   const navigation = useNavigation();
-  const [currentView, setCurrentView] = useState("main"); // 'main' or specific setting
+  const dispatch = useDispatch<AppDispatch>();
+  const [currentView, setCurrentView] = useState("main");
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
+
+  const handleSignOut = () => {
+    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+      {
+        text: "Cancel",
+        style: "cancel",
+      },
+      {
+        text: "Sign Out",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            // Dispatch the async logout thunk
+            await dispatch(logoutUser()).unwrap();
+
+            // Navigate to login screen
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "login" }],
+            });
+          } catch (error) {
+            console.error("Error during logout:", error);
+            Alert.alert("Error", "Failed to sign out. Please try again.");
+          }
+        },
+      },
+    ]);
+  };
 
   const settingsOptions = [
     {
@@ -193,7 +226,10 @@ const SettingsScreen = () => {
             </TouchableOpacity>
 
             {/* Sign Out */}
-            <TouchableOpacity className="bg-red-950 border border-red-800 rounded-xl p-4">
+            <TouchableOpacity
+              className="bg-red-950 border border-red-800 rounded-xl p-4"
+              onPress={handleSignOut}
+            >
               <View className="flex-row items-center justify-between">
                 <View className="flex-row items-center flex-1">
                   <View className="w-10 h-10 bg-red-800 rounded-full items-center justify-center mr-3">

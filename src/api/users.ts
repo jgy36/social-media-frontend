@@ -1,4 +1,4 @@
-// src/api/users.ts - React Native version
+// src/api/users.ts - FIXED VERSION with privacy settings initialization
 import { apiClient, getErrorMessage } from "./apiClient";
 import {
   UserProfile,
@@ -9,10 +9,12 @@ import {
 import { FollowResponse, FollowUser } from "@/types/follow";
 import { PostType } from "@/types/post";
 import { getUserId, setUserData, getUserData } from "@/utils/tokenUtils";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ensurePrivacySettingsExist } from "./privacySettings";
 
 /**
  * Get the current user's profile - React Native version
+ * FIXED: Now ensures privacy settings exist
  */
 export const getCurrentUser = async (): Promise<UserProfile | null> => {
   try {
@@ -31,6 +33,15 @@ export const getCurrentUser = async (): Promise<UserProfile | null> => {
         bio: response.data.bio,
         profileImageUrl: response.data.profileImageUrl,
       });
+
+      // CRITICAL FIX: Ensure privacy settings exist for this user
+      try {
+        await ensurePrivacySettingsExist();
+        console.log("Privacy settings verified for current user");
+      } catch (privacyError) {
+        console.error("Failed to ensure privacy settings exist:", privacyError);
+        // Don't fail the entire operation, but log the issue
+      }
     }
 
     return response.data;
@@ -114,7 +125,9 @@ export interface UpdateProfileRequest {
 /**
  * Update the current user's profile information - React Native version
  */
-export const updateProfile = async (profile: UpdateProfileRequest): Promise<UpdateProfileResponse> => {
+export const updateProfile = async (
+  profile: UpdateProfileRequest
+): Promise<UpdateProfileResponse> => {
   try {
     console.log("Updating profile with data:", profile);
 
@@ -332,6 +345,131 @@ export const getUserFollowing = async (
 };
 
 /**
+ * FIXED: Get posts by username with better error handling
+ */
+export const getPostsByUsername = async (
+  username: string
+): Promise<PostType[]> => {
+  try {
+    console.log(`Fetching posts for username: ${username}`);
+
+    const response = await apiClient.get(`/users/profile/${username}/posts`, {
+      headers: {
+        Accept: "application/json",
+        "Cache-Control": "no-cache",
+      },
+      responseType: "json",
+    });
+
+    console.log("Raw posts response type:", typeof response.data);
+
+    // Handle string responses (if still occurring)
+    if (typeof response.data === "string") {
+      console.log("Response is string - attempting to parse as JSON");
+      try {
+        const parsedData = JSON.parse(response.data);
+        console.log("Successfully parsed JSON from string response");
+
+        if (Array.isArray(parsedData)) {
+          return parsedData;
+        } else if (parsedData && typeof parsedData === "object") {
+          if (parsedData.id && parsedData.content) {
+            return [parsedData as PostType];
+          }
+        }
+
+        console.error("Unknown data structure in parsed JSON:", parsedData);
+        return [];
+      } catch (parseError) {
+        console.error("Failed to parse response string as JSON:", parseError);
+        return [];
+      }
+    }
+
+    // Handle array response (expected case)
+    if (Array.isArray(response.data)) {
+      console.log(`Found ${response.data.length} posts in array response`);
+      return response.data;
+    }
+
+    // Handle object response
+    if (response.data && typeof response.data === "object") {
+      if ("id" in response.data && "content" in response.data) {
+        console.log("Found single post object, converting to array");
+        return [response.data as PostType];
+      }
+
+      const extractedPosts = Object.values(response.data).filter(
+        (item) =>
+          item && typeof item === "object" && "id" in item && "content" in item
+      ) as PostType[];
+
+      console.log(`Extracted ${extractedPosts.length} posts from object`);
+      return extractedPosts;
+    }
+
+    console.log("No valid post data found in response");
+    return [];
+  } catch (error: any) {
+    console.error(`Error fetching posts for user ${username}:`, error);
+
+    // IMPROVED ERROR HANDLING: Check for specific privacy-related errors
+    if (error.response?.status === 500) {
+      const errorMessage = error.response?.data?.message || error.message || "";
+
+      if (
+        errorMessage.includes("public_profile") ||
+        errorMessage.includes("user_privacy_")
+      ) {
+        console.error(
+          "Privacy settings error detected. User may need privacy settings initialization."
+        );
+
+        // Try to get the user profile to trigger privacy settings creation
+        try {
+          const userProfile = await getUserProfile(username);
+          if (userProfile) {
+            console.log(
+              "User profile exists, but privacy settings may be missing"
+            );
+            // You might want to notify the backend to initialize privacy settings for this user
+          }
+        } catch (profileError) {
+          console.error("Failed to fetch user profile:", profileError);
+        }
+      }
+    }
+
+    return [];
+  }
+};
+
+/**
+ * Check if a user's account is private
+ */
+export const checkAccountPrivacy = async (userId: number): Promise<boolean> => {
+  try {
+    console.log("Checking privacy for user:", userId);
+
+    const response = await apiClient.get<{ isPrivate: boolean }>(
+      `/users/privacy-settings/status/${userId}`
+    );
+
+    console.log("Privacy response:", response.data);
+    return response.data.isPrivate;
+  } catch (error) {
+    console.error(`Error checking privacy status for user ${userId}:`, error);
+
+    // If privacy settings don't exist, assume public for now
+    // but this should be handled by ensuring privacy settings exist
+    console.warn(
+      "Privacy settings may not exist for user, defaulting to public"
+    );
+    return false;
+  }
+};
+
+/**
  * Refresh the current user's profile data - React Native version
  */
 export const refreshUserProfile = async (): Promise<boolean> => {
@@ -358,6 +496,16 @@ export const refreshUserProfile = async (): Promise<boolean> => {
         profileImageUrl: response.data.profileImageUrl,
       });
 
+      // Ensure privacy settings exist after refresh
+      try {
+        await ensurePrivacySettingsExist();
+      } catch (privacyError) {
+        console.error(
+          "Failed to ensure privacy settings after refresh:",
+          privacyError
+        );
+      }
+
       console.log("Profile data refreshed successfully");
       return true;
     }
@@ -367,93 +515,6 @@ export const refreshUserProfile = async (): Promise<boolean> => {
   } catch (error) {
     console.error("Error refreshing user profile:", error);
     return false;
-  }
-};
-
-export const getPostsByUsername = async (
-  username: string
-): Promise<PostType[]> => {
-  try {
-    console.log(`Fetching posts for username: ${username}`);
-    
-    const response = await apiClient.get(`/users/profile/${username}/posts`, {
-      headers: {
-        'Accept': 'application/json',
-        'Cache-Control': 'no-cache'
-      },
-      responseType: 'json'
-    });
-    
-    console.log("Raw posts response type:", typeof response.data);
-    
-    // Handle string responses (if still occurring)
-    if (typeof response.data === 'string') {
-      console.log("Response is string - attempting to parse as JSON");
-      try {
-        const parsedData = JSON.parse(response.data);
-        console.log("Successfully parsed JSON from string response");
-        
-        if (Array.isArray(parsedData)) {
-          return parsedData;
-        } else if (parsedData && typeof parsedData === 'object') {
-          if (parsedData.id && parsedData.content) {
-            return [parsedData as PostType];
-          }
-        }
-        
-        console.error("Unknown data structure in parsed JSON:", parsedData);
-        return [];
-      } catch (parseError) {
-        console.error("Failed to parse response string as JSON:", parseError);
-        return [];
-      }
-    }
-    
-    // Handle array response (expected case)
-    if (Array.isArray(response.data)) {
-      console.log(`Found ${response.data.length} posts in array response`);
-      return response.data;
-    } 
-    
-    // Handle object response
-    if (response.data && typeof response.data === 'object') {
-      if ('id' in response.data && 'content' in response.data) {
-        console.log("Found single post object, converting to array");
-        return [response.data as PostType];
-      }
-      
-      const extractedPosts = Object.values(response.data).filter(item => 
-        item && typeof item === 'object' && 'id' in item && 'content' in item
-      ) as PostType[];
-      
-      console.log(`Extracted ${extractedPosts.length} posts from object`);
-      return extractedPosts;
-    }
-    
-    console.log("No valid post data found in response");
-    return [];
-  } catch (error) {
-    console.error(`Error fetching posts for user ${username}:`, error);
-    return [];
-  }
-};
-
-/**
- * Check if a user's account is private
- */
-export const checkAccountPrivacy = async (userId: number): Promise<boolean> => {
-  try {
-    console.log("Checking privacy for user:", userId);
-
-    const response = await apiClient.get<{ isPrivate: boolean }>(
-      `/users/privacy-settings/status/${userId}`
-    );
-
-    console.log("Privacy response:", response.data);
-    return response.data.isPrivate;
-  } catch (error) {
-    console.error(`Error checking privacy status for user ${userId}:`, error);
-    throw error;
   }
 };
 

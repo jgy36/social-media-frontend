@@ -1,43 +1,54 @@
 // src/components/auth/LoginForm.tsx
-import React, { useState } from 'react';
-import { View, Text, Alert } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';;
-import { useDispatch } from 'react-redux';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { useLogin } from '@/hooks/useApi';
+import React, { useState } from "react";
+import { View, Text, Alert } from "react-native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import { useDispatch } from "react-redux";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useLogin } from "@/hooks/useApi";
+import { completeAuthSetup } from "@/utils/authUtils"; // ADD THIS IMPORT
 
 const LoginForm = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [twoFACode, setTwoFACode] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [twoFACode, setTwoFACode] = useState("");
   const [isTwoFARequired, setIsTwoFARequired] = useState(false);
-  const [tempToken, setTempToken] = useState('');
-  
+  const [tempToken, setTempToken] = useState("");
+
   const { loading, error, execute: login } = useLogin();
   const navigation = useNavigation();
   const dispatch = useDispatch();
 
   const handleSubmit = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password');
+      Alert.alert("Error", "Please enter both email and password");
       return;
     }
 
     try {
       const result = await login({ email, password });
-      
+
       if (result?.requires2FA) {
-        setTempToken(result.tempToken || '');
+        setTempToken(result.tempToken || "");
         setIsTwoFARequired(true);
         return;
       }
 
       if (result?.token) {
-        navigation.navigate('feed');
+        // CRITICAL FIX: Complete auth setup after successful login
+        console.log("Login successful, completing setup...");
+        const setupComplete = await completeAuthSetup();
+
+        if (setupComplete) {
+          console.log("Auth setup completed, navigating to feed");
+          navigation.navigate("feed");
+        } else {
+          console.warn("Auth setup had issues, but proceeding to feed");
+          navigation.navigate("feed"); // Still proceed but with warning
+        }
       }
     } catch (err) {
-      Alert.alert('Error', 'Login failed. Please try again.');
+      Alert.alert("Error", "Login failed. Please try again.");
     }
   };
 
@@ -45,7 +56,7 @@ const LoginForm = () => {
     return (
       <View className="space-y-4 p-4">
         <Text className="text-lg font-medium">Two-Factor Authentication</Text>
-        
+
         <View className="space-y-2">
           <Text className="text-sm font-medium">Verification Code</Text>
           <Input
@@ -56,11 +67,11 @@ const LoginForm = () => {
             maxLength={6}
           />
         </View>
-        
+
         <Button onPress={() => {}} disabled={loading}>
-          <Text>{loading ? 'Verifying...' : 'Verify'}</Text>
+          <Text>{loading ? "Verifying..." : "Verify"}</Text>
         </Button>
-        
+
         <Button variant="outline" onPress={() => setIsTwoFARequired(false)}>
           <Text>Back to login</Text>
         </Button>
@@ -75,7 +86,7 @@ const LoginForm = () => {
           <Text className="text-red-800 text-sm">{error.message}</Text>
         </View>
       )}
-      
+
       <View className="space-y-2">
         <Text className="text-sm font-medium">Email</Text>
         <Input
@@ -86,7 +97,7 @@ const LoginForm = () => {
           autoCapitalize="none"
         />
       </View>
-      
+
       <View className="space-y-2">
         <Text className="text-sm font-medium">Password</Text>
         <Input
@@ -96,12 +107,12 @@ const LoginForm = () => {
           secureTextEntry
         />
       </View>
-      
+
       <Button onPress={handleSubmit} disabled={loading}>
-        <Text>{loading ? 'Logging in...' : 'Login'}</Text>
+        <Text>{loading ? "Logging in..." : "Login"}</Text>
       </Button>
-      
-      <Button variant="outline" onPress={() => navigation.navigate('register')}>
+
+      <Button variant="outline" onPress={() => navigation.navigate("register")}>
         <Text>Don't have an account? Register here</Text>
       </Button>
     </View>
