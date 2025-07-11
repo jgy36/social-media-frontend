@@ -528,7 +528,7 @@ const UserProfileScreen = () => {
         backgroundColor: activeTab === "dating" ? "#f8f9fa" : "#000000",
       }}
     >
-      {/* Header - Match ProfileScreen exactly */}
+      {/* Header - Minimal with back button and tabs */}
       <View
         className="border-b"
         style={{
@@ -537,22 +537,23 @@ const UserProfileScreen = () => {
           borderBottomColor: activeTab === "dating" ? "#e5e7eb" : "#374151",
         }}
       >
-        <View className="flex-row justify-between items-center px-4 py-3 pt-12">
-          <View className="flex-1">
-            <Text
-              className="text-xl font-bold"
-              style={{ color: activeTab === "dating" ? "#000000" : "#ffffff" }}
-            >
-              {profile.displayName || profile.username}
-            </Text>
-            <Text
-              className="text-sm"
-              style={{ color: activeTab === "dating" ? "#6b7280" : "#9ca3af" }}
-            >
-              @{profile.username}
-            </Text>
-          </View>
-          {/* No settings button for other users */}
+        <View className="flex-row items-center px-4 py-2 pt-6">
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            className="mr-4"
+          >
+            <MaterialIcons
+              name="arrow-back"
+              size={24}
+              color={activeTab === "dating" ? "#000000" : "#ffffff"}
+            />
+          </TouchableOpacity>
+          <Text
+            className="text-lg font-semibold"
+            style={{ color: activeTab === "dating" ? "#000000" : "#ffffff" }}
+          >
+            Profile
+          </Text>
         </View>
 
         {/* Tab Selector - Only show if user has dating profile or is matched */}
@@ -630,88 +631,91 @@ const UserProfileScreen = () => {
               />
             }
           >
-            {/* Profile Section - Match ProfileScreen layout exactly */}
-            <View className="px-4 py-6">
-              <View className="flex-row justify-between items-start mb-6">
-                <View className="flex-1 mr-4">
-                  <Image
-                    source={{
-                      uri:
-                        profile.profileImageUrl ||
-                        `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`,
-                    }}
-                    className="w-20 h-20 rounded-full border-2 border-gray-700 mb-4"
-                  />
-                  <View className="mb-3">
-                    <Text className="text-xl font-bold text-white mb-1">
-                      {profile.displayName || profile.username}
-                    </Text>
-                    <Text className="text-gray-400 text-base">
-                      @{profile.username}
-                    </Text>
-                  </View>
-                  {profile.bio && (
-                    <Text className="text-white text-sm leading-5 mb-3">
-                      {profile.bio}
-                    </Text>
-                  )}
-                  <View className="flex-row items-center">
-                    <MaterialIcons
-                      name="calendar-today"
-                      size={14}
-                      color="#71767b"
-                    />
-                    <Text className="ml-2 text-sm text-gray-400">
-                      Joined{" "}
-                      {profile.joinDate
-                        ? new Date(profile.joinDate).toLocaleDateString(
-                            "en-US",
-                            {
-                              month: "long",
-                              year: "numeric",
-                            }
-                          )
-                        : "Recently"}
-                    </Text>
-                  </View>
-                </View>
+            {/* Profile Section - Updated layout */}
+            <View className="px-4 py-2">
+              {/* Profile Header - Redesigned */}
+              <View className="flex-row items-start mb-4">
+                {/* Larger Profile Image */}
+                <Image
+                  source={{
+                    uri:
+                      profile.profileImageUrl ||
+                      `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`,
+                  }}
+                  className="w-28 h-28 rounded-full border-2 border-gray-700 mr-4"
+                />
 
-                {/* Action Buttons - Replace Edit Profile with Follow/Message */}
-                {!isAuthenticated ? (
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate("Login")}
-                    className="border border-gray-600 px-4 py-2 rounded-full"
-                  >
-                    <Text className="text-white text-sm font-medium">
-                      Log in
-                    </Text>
-                  </TouchableOpacity>
-                ) : isCurrentUserProfile ? (
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate("Settings")}
-                    className="border border-gray-600 px-4 py-2 rounded-full"
-                  >
-                    <Text className="text-white text-sm font-medium">
-                      Edit profile
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
-                  <View className="space-y-2">
-                    <FollowButton
-                      userId={profile.id}
-                      initialIsFollowing={profile.isFollowing}
-                      onFollowChange={handleFollowChange}
-                    />
-                    <MessageButton
-                      username={profile.username}
-                      userId={profile.id}
-                    />
-                  </View>
-                )}
+                {/* Name, Username and Action Buttons next to image */}
+                <View className="flex-1 justify-center">
+                  <Text className="text-2xl font-bold text-white mb-1">
+                    {profile.displayName || profile.username}
+                  </Text>
+                  <Text className="text-gray-400 text-base mb-3">
+                    @{profile.username}
+                  </Text>
+
+                  {/* Action Buttons */}
+                  {!isAuthenticated ? (
+                    <TouchableOpacity
+                      onPress={() => navigation.navigate("Login")}
+                      className="border border-gray-600 px-4 py-2 rounded-full self-start"
+                    >
+                      <Text className="text-white text-sm font-medium">
+                        Log in
+                      </Text>
+                    </TouchableOpacity>
+                  ) : isCurrentUserProfile ? (
+                    <TouchableOpacity
+                      onPress={() => navigation.navigate("Settings")}
+                      className="border border-gray-600 px-4 py-2 rounded-full self-start"
+                    >
+                      <Text className="text-white text-sm font-medium">
+                        Edit profile
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View className="space-y-2">
+                      <FollowButton
+                        userId={profile.id}
+                        initialIsFollowing={profile.isFollowing}
+                        onFollowChange={handleFollowChange}
+                      />
+                      <MessageButton
+                        username={profile.username}
+                        userId={profile.id}
+                      />
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* Bio */}
+              {profile.bio && (
+                <Text className="text-white text-sm leading-5 mb-3">
+                  {profile.bio}
+                </Text>
+              )}
+
+              {/* Join Date */}
+              <View className="flex-row items-center mb-4">
+                <MaterialIcons
+                  name="calendar-today"
+                  size={14}
+                  color="#71767b"
+                />
+                <Text className="ml-2 text-sm text-gray-400">
+                  Joined{" "}
+                  {profile.joinDate
+                    ? new Date(profile.joinDate).toLocaleDateString("en-US", {
+                        month: "long",
+                        year: "numeric",
+                      })
+                    : "Recently"}
+                </Text>
               </View>
 
               {/* Stats */}
-              <View className="mb-6">
+              <View className="mb-4">
                 <UserStats
                   userId={profile.id}
                   postsCount={posts.length}
@@ -722,7 +726,7 @@ const UserProfileScreen = () => {
               </View>
 
               {/* Badges Section */}
-              <View className="mb-6">
+              <View className="mb-4">
                 <UserBadges
                   userId={profile.id}
                   isCurrentUser={isCurrentUserProfile}
@@ -730,7 +734,7 @@ const UserProfileScreen = () => {
               </View>
             </View>
 
-            {/* Secondary Navigation Tabs - Match ProfileScreen exactly */}
+            {/* Secondary Navigation Tabs */}
             <View className="border-b border-gray-800">
               <View className="px-4">
                 <View className="flex-row">

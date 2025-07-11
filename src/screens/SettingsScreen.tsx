@@ -7,7 +7,6 @@ import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/redux/store";
 import { logoutUser } from "@/redux/slices/userSlice";
 
-import ProfileSettings from "../components/settings/ProfileSettings";
 import AccountSettings from "../components/settings/AccountSettings";
 import PrivacySettings from "../components/settings/PrivacySettings";
 import NotificationSettings from "../components/settings/NotificationSettings";
@@ -49,12 +48,6 @@ const SettingsScreen = () => {
 
   const settingsOptions = [
     {
-      id: "profile",
-      label: "Profile Settings",
-      icon: "person",
-      description: "Edit your profile information",
-    },
-    {
       id: "account",
       label: "Account Settings",
       icon: "manage-accounts",
@@ -82,8 +75,6 @@ const SettingsScreen = () => {
 
   const renderSettingContent = (settingId: string) => {
     switch (settingId) {
-      case "profile":
-        return <ProfileSettings />;
       case "account":
         return <AccountSettings />;
       case "privacy":

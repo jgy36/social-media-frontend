@@ -105,6 +105,10 @@ const ProfileScreen = () => {
     navigation.navigate("Settings" as never);
   };
 
+  const navigateToProfileEdit = () => {
+    navigation.navigate("ProfileEdit" as never);
+  };
+
   const setupDatingProfile = () => {
     navigation.navigate("DatingSetup" as never);
   };
@@ -193,7 +197,7 @@ const ProfileScreen = () => {
         backgroundColor: activeTab === "dating" ? "#f8f9fa" : "#000000",
       }}
     >
-      {/* Header */}
+      {/* Header - Minimal with just tabs */}
       <View
         className="border-b"
         style={{
@@ -202,36 +206,8 @@ const ProfileScreen = () => {
           borderBottomColor: activeTab === "dating" ? "#e5e7eb" : "#374151",
         }}
       >
-        <View className="flex-row justify-between items-center px-4 py-3 pt-12">
-          <View className="flex-1">
-            <Text
-              className="text-xl font-bold"
-              style={{ color: activeTab === "dating" ? "#000000" : "#ffffff" }}
-            >
-              {user.displayName || user.username}
-            </Text>
-            <Text
-              className="text-sm"
-              style={{ color: activeTab === "dating" ? "#6b7280" : "#9ca3af" }}
-            >
-              @{user.username}
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={navigateToSettings}
-            className="p-2"
-            activeOpacity={0.7}
-          >
-            <MaterialIcons
-              name="settings"
-              size={24}
-              color={activeTab === "dating" ? "#000000" : "#ffffff"}
-            />
-          </TouchableOpacity>
-        </View>
-
         {/* Tab Selector */}
-        <View className="flex-row px-4 pb-3">
+        <View className="flex-row px-4 pb-3 pt-6">
           <TouchableOpacity
             onPress={() => setActiveTab("social")}
             className="mr-8 pb-2"
@@ -302,73 +278,96 @@ const ProfileScreen = () => {
           scrollEnabled={!isModalOpen}
         >
           {activeTab === "social" ? (
-            // Social Media Profile (keep existing)
+            // Social Media Profile (updated layout)
             <>
-              <View className="px-4 py-6">
-                <View className="flex-row justify-between items-start mb-6">
-                  <View className="flex-1 mr-4">
-                    <Image
-                      source={{
-                        uri:
-                          user.profileImageUrl ||
-                          `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`,
-                      }}
-                      className="w-20 h-20 rounded-full border-2 border-gray-700 mb-4"
-                    />
-                    <View className="mb-3">
-                      <Text className="text-xl font-bold text-white mb-1">
+              <View className="px-4 py-2">
+                {/* Profile Header - Redesigned with settings icon */}
+                <View className="flex-row items-start mb-4">
+                  {/* Larger Profile Image */}
+                  <Image
+                    source={{
+                      uri:
+                        user.profileImageUrl ||
+                        `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`,
+                    }}
+                    className="w-28 h-28 rounded-full border-2 border-gray-700 mr-4"
+                  />
+
+                  {/* Name and Username next to image */}
+                  <View className="flex-1 justify-center">
+                    <View className="flex-row items-center justify-between mb-1">
+                      <Text className="text-2xl font-bold text-white">
                         {user.displayName || user.username}
                       </Text>
-                      <Text className="text-gray-400 text-base">
-                        @{user.username}
-                      </Text>
+                      <TouchableOpacity
+                        onPress={navigateToSettings}
+                        className="p-2"
+                        activeOpacity={0.7}
+                      >
+                        <MaterialIcons
+                          name="settings"
+                          size={24}
+                          color="#ffffff"
+                        />
+                      </TouchableOpacity>
                     </View>
-                    {user.bio && (
-                      <Text className="text-white text-sm leading-5 mb-3">
-                        {user.bio}
-                      </Text>
-                    )}
-                    <View className="flex-row items-center">
-                      <MaterialIcons
-                        name="calendar-today"
-                        size={14}
-                        color="#71767b"
-                      />
-                      <Text className="ml-2 text-sm text-gray-400">
-                        Joined{" "}
-                        {(user as any).joinDate
-                          ? new Date((user as any).joinDate).toLocaleDateString(
-                              "en-US",
-                              {
-                                month: "long",
-                                year: "numeric",
-                              }
-                            )
-                          : "Recently"}
-                      </Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity
-                    onPress={navigateToSettings}
-                    className="border border-gray-600 px-4 py-2 rounded-full"
-                  >
-                    <Text className="text-white text-sm font-medium">
-                      Edit profile
+                    <Text className="text-gray-400 text-base mb-3">
+                      @{user.username}
                     </Text>
-                  </TouchableOpacity>
+
+                    {/* Edit Profile Button */}
+                    <TouchableOpacity
+                      onPress={navigateToProfileEdit}
+                      className="border border-gray-600 px-4 py-2 rounded-full self-start"
+                    >
+                      <Text className="text-white text-sm font-medium">
+                        Edit profile
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
+                {/* Bio */}
+                {user.bio && (
+                  <Text className="text-white text-sm leading-5 mb-3">
+                    {user.bio}
+                  </Text>
+                )}
+
+                {/* Join Date */}
+                <View className="flex-row items-center mb-4">
+                  <MaterialIcons
+                    name="calendar-today"
+                    size={14}
+                    color="#71767b"
+                  />
+                  <Text className="ml-2 text-sm text-gray-400">
+                    Joined{" "}
+                    {(user as any).joinDate
+                      ? new Date((user as any).joinDate).toLocaleDateString(
+                          "en-US",
+                          {
+                            month: "long",
+                            year: "numeric",
+                          }
+                        )
+                      : "Recently"}
+                  </Text>
+                </View>
+
+                {/* User Stats */}
                 {userId && (
                   <ErrorBoundary>
-                    <View className="mb-6">
+                    <View className="mb-4">
                       <UserStats userId={userId} />
                     </View>
                   </ErrorBoundary>
                 )}
 
+                {/* User Badges */}
                 {userId && (
                   <ErrorBoundary>
-                    <View className="mb-6">
+                    <View className="mb-4">
                       <UserBadges
                         userId={userId}
                         isCurrentUser={true}

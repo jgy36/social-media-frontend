@@ -19,6 +19,7 @@ export type RootStackParamList = {
   UserProfile: { username: string };
   Settings: undefined;
   FollowRequests: undefined;
+  ProfileEdit: undefined; // ADD THIS LINE
 
   // Community screens
   Communities: undefined;

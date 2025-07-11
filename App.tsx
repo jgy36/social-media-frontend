@@ -40,6 +40,7 @@ import MapScreen from "./src/screens/MapScreen";
 import MessageScreen from "./src/screens/MessageScreen";
 import ProfileScreen from "./src/screens/ProfileScreen";
 import UserProfileScreen from "./src/screens/UserProfileScreen";
+import ProfileEditScreen from "./src/screens/ProfileEditScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
 import FollowRequestsScreen from "./src/screens/FollowRequestsScreen";
 import CommunitiesListScreen from "./src/screens/community/CommunitiesListScreen";
@@ -350,7 +351,7 @@ function AppNavigator() {
 
             {/* Stack screens that overlay the tabs */}
             <Stack.Screen name="UserProfile" component={UserProfileScreen} />
-            <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
             <Stack.Screen
               name="FollowRequests"
               component={FollowRequestsScreen}

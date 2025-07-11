@@ -38,6 +38,7 @@ import PhotoCameraScreen from "../screens/messages/PhotoCameraScreen";
 import PhotoViewerScreen from "../screens/messages/PhotoViewerScreen";
 import PhotoConversationScreen from "../screens/messages/PhotoConversationScreen";
 import DatingSettingsScreen from "@/screens/DatingSettingsScreen";
+import ProfileEditScreen from "../screens/ProfileEditScreen";
 
 import { RootStackParamList, TabParamList } from "./types";
 
@@ -140,6 +141,7 @@ const AppNavigator = () => {
             {/* Profile screens */}
             <Stack.Screen name="UserProfile" component={UserProfileScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
             <Stack.Screen
               name="FollowRequests"
               component={FollowRequestsScreen}
