@@ -20,6 +20,7 @@ export type RootStackParamList = {
   Settings: undefined;
   FollowRequests: undefined;
   ProfileEdit: undefined; // ADD THIS LINE
+  SubscriptionPlans: undefined; // Add this line
 
   // Community screens
   Communities: undefined;

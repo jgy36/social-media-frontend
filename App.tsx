@@ -42,6 +42,8 @@ import ProfileScreen from "./src/screens/ProfileScreen";
 import UserProfileScreen from "./src/screens/UserProfileScreen";
 import ProfileEditScreen from "./src/screens/ProfileEditScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
+import SubscriptionPlansScreen from "./src/screens/SubscriptionPlansScreen";
+
 import FollowRequestsScreen from "./src/screens/FollowRequestsScreen";
 import CommunitiesListScreen from "./src/screens/community/CommunitiesListScreen";
 import CommunityDetailScreen from "./src/screens/community/CommunityDetailScreen";
@@ -353,8 +355,25 @@ function AppNavigator() {
             <Stack.Screen name="UserProfile" component={UserProfileScreen} />
             <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
             <Stack.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
               name="FollowRequests"
               component={FollowRequestsScreen}
+            />
+            {/* ADD THIS NEW SCREEN */}
+            <Stack.Screen
+              name="SubscriptionPlans"
+              component={SubscriptionPlansScreen}
+              options={{
+                headerShown: true,
+                title: "Subscription Plans",
+                presentation: "modal", // Optional: makes it appear as a modal
+                headerStyle: { backgroundColor: "#000" },
+                headerTintColor: "#fff",
+              }}
             />
             <Stack.Screen
               name="CommunityDetail"

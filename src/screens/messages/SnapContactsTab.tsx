@@ -1,4 +1,4 @@
-// src/screens/messages/SnapContactsTab.tsx - All green colors
+// src/screens/messages/SnapContactsTab.tsx - Fixed to actually send photos
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -15,6 +15,7 @@ import { RootState } from "@/redux/store";
 import {
   getEnhancedPhotoMessageConversations,
   EnhancedPhotoConversation,
+  sendPhotoMessage, // Import the actual API function
 } from "@/api/photoMessages";
 
 interface PreSelectedRecipient {
@@ -80,6 +81,7 @@ const SnapContactsTab: React.FC<SnapContactsTabProps> = ({
     );
   };
 
+  // FIXED: Actually send the photo message to each selected contact
   const handleSendSnap = async () => {
     if (selectedContacts.length === 0) {
       Alert.alert(
@@ -96,10 +98,41 @@ const SnapContactsTab: React.FC<SnapContactsTabProps> = ({
 
     try {
       setSending(true);
-      console.log("📸 Sending snap to:", selectedContacts);
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      console.log("✅ Snap sent successfully!");
-      onPhotoSent();
+      console.log("📸 Actually sending snap to:", selectedContacts);
+
+      // Send the photo to each selected contact
+      const sendPromises = selectedContacts.map(async (recipientId) => {
+        console.log(`📤 Sending photo to user ${recipientId}...`);
+        const response = await sendPhotoMessage(recipientId, capturedPhoto);
+        console.log(`✅ Photo sent to user ${recipientId}:`, response);
+        return response;
+      });
+
+      // Wait for all sends to complete
+      const results = await Promise.all(sendPromises);
+
+      // Check if all sends were successful
+      const failedSends = results.filter((result) => !result.success);
+
+      if (failedSends.length > 0) {
+        console.error("❌ Some sends failed:", failedSends);
+        Alert.alert(
+          "Partial Send Failure",
+          `Failed to send to ${failedSends.length} recipient(s). Please try again.`
+        );
+        return;
+      }
+
+      console.log("✅ All snaps sent successfully!");
+
+      // Show success message
+      Alert.alert(
+        "Snap Sent! 📸",
+        `Your snap was sent to ${selectedContacts.length} friend${
+          selectedContacts.length > 1 ? "s" : ""
+        }!`,
+        [{ text: "OK", onPress: onPhotoSent }]
+      );
     } catch (error) {
       console.error("❌ Failed to send snap:", error);
       Alert.alert("Send Failed", "Failed to send your snap. Please try again.");
@@ -177,7 +210,7 @@ const SnapContactsTab: React.FC<SnapContactsTabProps> = ({
           {isPreSelected && (
             <Text
               style={{
-                color: "#10B981", // Changed from #FF6B9D to green
+                color: "#10B981",
                 fontSize: 12,
                 fontWeight: "500",
               }}
@@ -303,7 +336,7 @@ const SnapContactsTab: React.FC<SnapContactsTabProps> = ({
 
       <Text
         style={{
-          color: "#10B981", // Changed from #FF6B9D to green
+          color: "#10B981",
           fontSize: 14,
           textAlign: "center",
           fontWeight: "600",
@@ -379,8 +412,8 @@ const SnapContactsTab: React.FC<SnapContactsTabProps> = ({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#10B981" // Changed from #FF6B9D to green
-            colors={["#10B981"]} // Changed from #FF6B9D to green
+            tintColor="#10B981"
+            colors={["#10B981"]}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -405,7 +438,7 @@ const SnapContactsTab: React.FC<SnapContactsTabProps> = ({
             onPress={handleSendSnap}
             disabled={sending}
             style={{
-              backgroundColor: sending ? "#666" : "#10B981", // Changed from #FF6B9D to green
+              backgroundColor: sending ? "#666" : "#10B981",
               borderRadius: 30,
               paddingVertical: 16,
               flexDirection: "row",

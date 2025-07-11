@@ -14,14 +14,44 @@ import {
 } from "react-native";
 import { useSelector } from "react-redux";
 import { RootState } from "../redux/store";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import {
+  useNavigation,
+  useFocusEffect,
+  CompositeNavigationProp,
+} from "@react-navigation/native";
+import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getCurrentDatingProfile, isDatingProfileComplete } from "@/api/dating";
 
 import UserBadges from "../components/profile/UserBadges";
 import UserStats from "../components/profile/UserStats";
 import ProfilePosts from "../components/profile/ProfilePosts";
+import UpgradeBanner from "../components/subscription/UpgradeBanner";
+import UsageTracker from "../components/subscription/UsageTracker";
 
 const { width } = Dimensions.get("window");
+
+// Navigation type definitions for nested navigation
+type TabParamList = {
+  Feed: undefined;
+  Explore: undefined;
+  Messages: undefined;
+  Dating: undefined;
+  Profile: undefined;
+};
+
+type RootStackParamList = {
+  MainTabs: undefined;
+  Settings: undefined;
+  ProfileEdit: undefined;
+  DatingSetup: undefined;
+  SubscriptionPlans: undefined;
+  [key: string]: undefined | object;
+};
+
+type ProfileScreenNavigationProp = CompositeNavigationProp;
+BottomTabNavigationProp<TabParamList, "Profile">,
+  NativeStackNavigationProp<RootStackParamList>;
 
 // Silent error boundary - keeps components working without visible errors
 const ErrorBoundary = ({
@@ -40,16 +70,16 @@ const ErrorBoundary = ({
 };
 
 const ProfileScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<ProfileScreenNavigationProp>();
   const user = useSelector((state: RootState) => state.user);
   const [activeTab, setActiveTab] = useState<"social" | "dating">("social");
   const [datingProfile, setDatingProfile] = useState<any>(null);
   const [hasDatingProfile, setHasDatingProfile] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false); // NEW: Track modal state
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const translateX = useRef(new Animated.Value(0)).current;
   const activeTabRef = useRef(activeTab);
-  const isModalOpenRef = useRef(isModalOpen); // NEW: Ref for modal state
+  const isModalOpenRef = useRef(isModalOpen);
 
   // Update refs when values change
   React.useEffect(() => {
@@ -101,19 +131,32 @@ const ProfileScreen = () => {
     }, [checkDatingProfile])
   );
 
-  const navigateToSettings = () => {
-    navigation.navigate("Settings" as never);
+  // Safe navigation helper
+  const safeNavigate = (screenName: string, params?: any) => {
+    try {
+      const parentNav = navigation.getParent();
+      if (parentNav) {
+        parentNav.navigate(screenName as never, params as never);
+      } else {
+        navigation.navigate(screenName as never, params as never);
+      }
+    } catch (error) {
+      console.error(`Navigation error to ${screenName}:`, error);
+      try {
+        (navigation as any).navigate(screenName, params);
+      } catch (fallbackError) {
+        console.error("Fallback navigation also failed:", fallbackError);
+      }
+    }
   };
 
-  const navigateToProfileEdit = () => {
-    navigation.navigate("ProfileEdit" as never);
-  };
+  // Robust navigation functions that handle nested navigators
+  const navigateToSettings = () => safeNavigate("Settings");
+  const navigateToProfileEdit = () => safeNavigate("ProfileEdit");
+  const setupDatingProfile = () => safeNavigate("DatingSetup");
+  const navigateToSubscriptionPlans = () => safeNavigate("SubscriptionPlans");
 
-  const setupDatingProfile = () => {
-    navigation.navigate("DatingSetup" as never);
-  };
-
-  // NEW: Callbacks for modal state
+  // Callbacks for modal state
   const handleModalOpen = useCallback(() => {
     setIsModalOpen(true);
   }, []);
@@ -127,7 +170,6 @@ const ProfileScreen = () => {
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (evt, gestureState) => {
-        // NEW: Don't respond if modal is open
         if (isModalOpenRef.current) {
           return false;
         }
@@ -138,7 +180,6 @@ const ProfileScreen = () => {
         return isHorizontalSwipe && isSignificantSwipe;
       },
       onPanResponderMove: (evt, gestureState) => {
-        // NEW: Don't move if modal is open
         if (isModalOpenRef.current) {
           return;
         }
@@ -148,7 +189,6 @@ const ProfileScreen = () => {
         }
       },
       onPanResponderRelease: (evt, gestureState) => {
-        // NEW: Don't respond if modal is open
         if (isModalOpenRef.current) {
           Animated.spring(translateX, {
             toValue: 0,
@@ -168,12 +208,10 @@ const ProfileScreen = () => {
         }).start();
 
         if (gestureState.dx > swipeThreshold) {
-          // Swipe right - go to social
           if (currentTab === "dating") {
             setActiveTab("social");
           }
         } else if (gestureState.dx < -swipeThreshold) {
-          // Swipe left - go to dating
           if (currentTab === "social") {
             setActiveTab("dating");
           }
@@ -266,7 +304,6 @@ const ProfileScreen = () => {
         className="flex-1"
         style={{
           transform: [{ translateX }],
-          // NEW: Disable pointer events when modal is open
           pointerEvents: isModalOpen ? "none" : "auto",
         }}
         {...panResponder.panHandlers}
@@ -274,13 +311,20 @@ const ProfileScreen = () => {
         <ScrollView
           className="flex-1"
           showsVerticalScrollIndicator={false}
-          // NEW: Disable scrolling when modal is open
           scrollEnabled={!isModalOpen}
         >
           {activeTab === "social" ? (
-            // Social Media Profile (updated layout)
-            <>
-              <View className="px-4 py-2">
+            // Social Media Profile
+            <View className="pt-4">
+              {/* Social Upgrade Banner - moved to top above everything with top padding */}
+              <UpgradeBanner
+                currentTier="Free"
+                mode="social"
+                onPress={navigateToSubscriptionPlans}
+              />
+
+              <View className="px-4 pt-3 pb-2">
+                {/* Increased top padding for more spacing below banner */}
                 {/* Profile Header - Redesigned with settings icon */}
                 <View className="flex-row items-start mb-4">
                   {/* Larger Profile Image */}
@@ -326,14 +370,12 @@ const ProfileScreen = () => {
                     </TouchableOpacity>
                   </View>
                 </View>
-
                 {/* Bio */}
                 {user.bio && (
                   <Text className="text-white text-sm leading-5 mb-3">
                     {user.bio}
                   </Text>
                 )}
-
                 {/* Join Date */}
                 <View className="flex-row items-center mb-4">
                   <MaterialIcons
@@ -354,7 +396,6 @@ const ProfileScreen = () => {
                       : "Recently"}
                   </Text>
                 </View>
-
                 {/* User Stats */}
                 {userId && (
                   <ErrorBoundary>
@@ -363,7 +404,6 @@ const ProfileScreen = () => {
                     </View>
                   </ErrorBoundary>
                 )}
-
                 {/* User Badges */}
                 {userId && (
                   <ErrorBoundary>
@@ -425,10 +465,10 @@ const ProfileScreen = () => {
                   <ProfilePosts />
                 </ErrorBoundary>
               </View>
-            </>
+            </View>
           ) : (
             // Dating Profile - Updated Layout with Bio Between Photos
-            <View>
+            <View className="pt-4">
               {hasDatingProfile && datingProfile ? (
                 <ScrollView showsVerticalScrollIndicator={false}>
                   {/* Edit Profile Button */}
@@ -443,8 +483,25 @@ const ProfileScreen = () => {
                     </TouchableOpacity>
                   </View>
 
+                  {/* Dating Upgrade Banner - prominently placed after edit button */}
+                  <View className="mt-3">
+                    <UpgradeBanner
+                      currentTier="Free"
+                      mode="dating"
+                      onPress={navigateToSubscriptionPlans}
+                    />
+                  </View>
+
+                  {/* Usage Tracker - shows dating feature limits */}
+                  <View className="mt-2">
+                    <UsageTracker
+                      onUpgradePress={navigateToSubscriptionPlans}
+                    />
+                  </View>
+
                   {/* Move Name Above First Photo */}
-                  <View className="mx-4 mt-4">
+                  <View className="mx-4 mt-6">
+                    {/* Increased top margin for more spacing */}
                     <Text className="text-3xl font-bold text-gray-800 mb-2">
                       {user.displayName || user.username}, {datingProfile.age}
                     </Text>
@@ -665,18 +722,27 @@ const ProfileScreen = () => {
                 </ScrollView>
               ) : (
                 // No Dating Profile - Setup Prompt
-                <View className="items-center py-16 px-4">
-                  <MaterialIcons name="favorite" size={80} color="#E91E63" />
-
+                <View className="items-center py-8 px-4">
+                  {/* Reduced top padding since banner takes up more space */}
+                  {/* Upgrade banner in empty state too */}
+                  <View className="w-full mb-8">
+                    <UpgradeBanner
+                      currentTier="Free"
+                      mode="dating"
+                      onPress={navigateToSubscriptionPlans}
+                    />
+                  </View>
+                  <View className="mt-4">
+                    {/* Added spacing between banner and icon */}
+                    <MaterialIcons name="favorite" size={80} color="#E91E63" />
+                  </View>
                   <Text className="text-gray-800 text-2xl font-bold text-center mt-6 mb-4">
                     Set Up Your Dating Profile
                   </Text>
-
                   <Text className="text-gray-600 text-base text-center mb-8 leading-6">
                     Create your dating profile to start meeting amazing people.
                     Add photos, write about yourself, and set your preferences.
                   </Text>
-
                   <TouchableOpacity
                     onPress={setupDatingProfile}
                     className="bg-pink-500 rounded-full px-8 py-4"
