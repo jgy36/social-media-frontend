@@ -1,5 +1,5 @@
-// src/screens/UserProfileScreen.tsx - Updated to match ProfileScreen layout
-import React, { useState, useEffect } from "react";
+// src/screens/UserProfileScreen.tsx - Enhanced with swipeable tabs
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,9 @@ import {
   Image,
   RefreshControl,
   ActivityIndicator,
+  PanResponder,
+  Animated,
+  Dimensions,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -27,6 +30,8 @@ import {
 } from "@/api/users";
 import { getUserDatingProfile, checkMatchStatus } from "@/api/dating";
 import { DatingProfile } from "@/types/dating";
+
+const { width } = Dimensions.get("window");
 
 interface UserProfile {
   id: number;
@@ -58,7 +63,15 @@ const UserProfileScreen = () => {
   const [activeTab, setActiveTab] = useState<"social" | "dating">("social");
   const [isMatched, setIsMatched] = useState(false);
   const [loadingDatingProfile, setLoadingDatingProfile] = useState(false);
-  const [activePostTab, setActivePostTab] = useState("posts"); // New state for secondary tabs
+  const [activePostTab, setActivePostTab] = useState("posts");
+
+  const translateX = useRef(new Animated.Value(0)).current;
+  const activeTabRef = useRef(activeTab);
+
+  // Update ref when tab changes
+  React.useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   // Get current user from Redux store
   const currentUser = useSelector((state: RootState) => state.user);
@@ -202,6 +215,55 @@ const UserProfileScreen = () => {
       fetchDatingProfile();
     }
   };
+
+  // Pan responder for swipe gestures
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // Only allow swipe if user has dating tab available
+        if (!isMatched && !isCurrentUserProfile) return false;
+        const isHorizontalSwipe =
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        const isSignificantSwipe = Math.abs(gestureState.dx) > 30;
+        return isHorizontalSwipe && isSignificantSwipe;
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        if (Math.abs(gestureState.dx) < width * 0.3) {
+          translateX.setValue(gestureState.dx * 0.1);
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        const currentTab = activeTabRef.current;
+        const swipeThreshold = 50;
+
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 100,
+          friction: 8,
+        }).start();
+
+        if (gestureState.dx > swipeThreshold) {
+          // Swipe right - go to social
+          if (currentTab === "dating") {
+            setActiveTab("social");
+          }
+        } else if (gestureState.dx < -swipeThreshold) {
+          // Swipe left - go to dating
+          if (currentTab === "social") {
+            setActiveTab("dating");
+          }
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+      },
+    })
+  ).current;
 
   const renderDatingProfile = () => {
     if (loadingDatingProfile) {
@@ -552,253 +614,273 @@ const UserProfileScreen = () => {
       </View>
 
       {/* Content */}
-      {activeTab === "social" ? (
-        <ScrollView
-          className="flex-1"
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-          }
-        >
-          {/* Profile Section - Match ProfileScreen layout exactly */}
-          <View className="px-4 py-6">
-            <View className="flex-row justify-between items-start mb-6">
-              <View className="flex-1 mr-4">
-                <Image
-                  source={{
-                    uri:
-                      profile.profileImageUrl ||
-                      `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`,
-                  }}
-                  className="w-20 h-20 rounded-full border-2 border-gray-700 mb-4"
-                />
-                <View className="mb-3">
-                  <Text className="text-xl font-bold text-white mb-1">
-                    {profile.displayName || profile.username}
-                  </Text>
-                  <Text className="text-gray-400 text-base">
-                    @{profile.username}
-                  </Text>
-                </View>
-                {profile.bio && (
-                  <Text className="text-white text-sm leading-5 mb-3">
-                    {profile.bio}
-                  </Text>
-                )}
-                <View className="flex-row items-center">
-                  <MaterialIcons
-                    name="calendar-today"
-                    size={14}
-                    color="#71767b"
+      <Animated.View
+        className="flex-1"
+        style={{ transform: [{ translateX }] }}
+        {...panResponder.panHandlers}
+      >
+        {activeTab === "social" ? (
+          <ScrollView
+            className="flex-1"
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+              />
+            }
+          >
+            {/* Profile Section - Match ProfileScreen layout exactly */}
+            <View className="px-4 py-6">
+              <View className="flex-row justify-between items-start mb-6">
+                <View className="flex-1 mr-4">
+                  <Image
+                    source={{
+                      uri:
+                        profile.profileImageUrl ||
+                        `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`,
+                    }}
+                    className="w-20 h-20 rounded-full border-2 border-gray-700 mb-4"
                   />
-                  <Text className="ml-2 text-sm text-gray-400">
-                    Joined{" "}
-                    {profile.joinDate
-                      ? new Date(profile.joinDate).toLocaleDateString("en-US", {
-                          month: "long",
-                          year: "numeric",
-                        })
-                      : "Recently"}
-                  </Text>
+                  <View className="mb-3">
+                    <Text className="text-xl font-bold text-white mb-1">
+                      {profile.displayName || profile.username}
+                    </Text>
+                    <Text className="text-gray-400 text-base">
+                      @{profile.username}
+                    </Text>
+                  </View>
+                  {profile.bio && (
+                    <Text className="text-white text-sm leading-5 mb-3">
+                      {profile.bio}
+                    </Text>
+                  )}
+                  <View className="flex-row items-center">
+                    <MaterialIcons
+                      name="calendar-today"
+                      size={14}
+                      color="#71767b"
+                    />
+                    <Text className="ml-2 text-sm text-gray-400">
+                      Joined{" "}
+                      {profile.joinDate
+                        ? new Date(profile.joinDate).toLocaleDateString(
+                            "en-US",
+                            {
+                              month: "long",
+                              year: "numeric",
+                            }
+                          )
+                        : "Recently"}
+                    </Text>
+                  </View>
                 </View>
+
+                {/* Action Buttons - Replace Edit Profile with Follow/Message */}
+                {!isAuthenticated ? (
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate("Login")}
+                    className="border border-gray-600 px-4 py-2 rounded-full"
+                  >
+                    <Text className="text-white text-sm font-medium">
+                      Log in
+                    </Text>
+                  </TouchableOpacity>
+                ) : isCurrentUserProfile ? (
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate("Settings")}
+                    className="border border-gray-600 px-4 py-2 rounded-full"
+                  >
+                    <Text className="text-white text-sm font-medium">
+                      Edit profile
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View className="space-y-2">
+                    <FollowButton
+                      userId={profile.id}
+                      initialIsFollowing={profile.isFollowing}
+                      onFollowChange={handleFollowChange}
+                    />
+                    <MessageButton
+                      username={profile.username}
+                      userId={profile.id}
+                    />
+                  </View>
+                )}
               </View>
 
-              {/* Action Buttons - Replace Edit Profile with Follow/Message */}
-              {!isAuthenticated ? (
-                <TouchableOpacity
-                  onPress={() => navigation.navigate("Login")}
-                  className="border border-gray-600 px-4 py-2 rounded-full"
-                >
-                  <Text className="text-white text-sm font-medium">Log in</Text>
-                </TouchableOpacity>
-              ) : isCurrentUserProfile ? (
-                <TouchableOpacity
-                  onPress={() => navigation.navigate("Settings")}
-                  className="border border-gray-600 px-4 py-2 rounded-full"
-                >
-                  <Text className="text-white text-sm font-medium">
-                    Edit profile
-                  </Text>
-                </TouchableOpacity>
+              {/* Stats */}
+              <View className="mb-6">
+                <UserStats
+                  userId={profile.id}
+                  postsCount={posts.length}
+                  followersCount={profile.followersCount}
+                  followingCount={profile.followingCount}
+                  onFollowChange={handleStatsChange}
+                />
+              </View>
+
+              {/* Badges Section */}
+              <View className="mb-6">
+                <UserBadges
+                  userId={profile.id}
+                  isCurrentUser={isCurrentUserProfile}
+                />
+              </View>
+            </View>
+
+            {/* Secondary Navigation Tabs - Match ProfileScreen exactly */}
+            <View className="border-b border-gray-800">
+              <View className="px-4">
+                <View className="flex-row">
+                  <TouchableOpacity
+                    className="mr-8 pb-4"
+                    onPress={() => setActivePostTab("posts")}
+                  >
+                    <Text
+                      className={`font-semibold text-base ${
+                        activePostTab === "posts"
+                          ? "text-white"
+                          : "text-gray-400"
+                      }`}
+                    >
+                      Posts
+                    </Text>
+                    {activePostTab === "posts" && (
+                      <View className="mt-2 h-0.5 w-12 bg-blue-500 rounded-full" />
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="mr-8 pb-4"
+                    onPress={() => setActivePostTab("replies")}
+                  >
+                    <Text
+                      className={`font-medium text-base ${
+                        activePostTab === "replies"
+                          ? "text-white"
+                          : "text-gray-400"
+                      }`}
+                    >
+                      Replies
+                    </Text>
+                    {activePostTab === "replies" && (
+                      <View className="mt-2 h-0.5 w-12 bg-blue-500 rounded-full" />
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="mr-8 pb-4"
+                    onPress={() => setActivePostTab("media")}
+                  >
+                    <Text
+                      className={`font-medium text-base ${
+                        activePostTab === "media"
+                          ? "text-white"
+                          : "text-gray-400"
+                      }`}
+                    >
+                      Media
+                    </Text>
+                    {activePostTab === "media" && (
+                      <View className="mt-2 h-0.5 w-12 bg-blue-500 rounded-full" />
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="pb-4"
+                    onPress={() => setActivePostTab("likes")}
+                  >
+                    <Text
+                      className={`font-medium text-base ${
+                        activePostTab === "likes"
+                          ? "text-white"
+                          : "text-gray-400"
+                      }`}
+                    >
+                      Likes
+                    </Text>
+                    {activePostTab === "likes" && (
+                      <View className="mt-2 h-0.5 w-12 bg-blue-500 rounded-full" />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            {/* Posts Section */}
+            <View className="bg-black">
+              {/* Section Title */}
+              <View className="px-4 py-4">
+                <Text className="text-white text-xl font-bold">
+                  {profile.displayName || profile.username}'s Posts
+                </Text>
+              </View>
+
+              {/* Posts Content */}
+              {isAuthenticated ? (
+                posts.length > 0 ? (
+                  posts.map((post) => (
+                    <View key={post.id}>
+                      <Post post={post} />
+                    </View>
+                  ))
+                ) : (
+                  <View className="p-8 items-center">
+                    {profile.isPrivate &&
+                    !profile.isFollowing &&
+                    !isCurrentUserProfile ? (
+                      <>
+                        <MaterialIcons name="lock" size={48} color="#71767b" />
+                        <Text className="text-lg font-medium text-white mt-4">
+                          Private Account
+                        </Text>
+                        <Text className="text-gray-400 text-center mt-2">
+                          Follow this user to see their posts.
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <MaterialIcons
+                          name="post-add"
+                          size={48}
+                          color="#71767b"
+                        />
+                        <Text className="text-lg font-medium text-white mt-4">
+                          No posts yet
+                        </Text>
+                        <Text className="text-gray-400 text-center mt-2">
+                          This user hasn't posted anything.
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                )
               ) : (
-                <View className="space-y-2">
-                  <FollowButton
-                    userId={profile.id}
-                    initialIsFollowing={profile.isFollowing}
-                    onFollowChange={handleFollowChange}
-                  />
-                  <MessageButton
-                    username={profile.username}
-                    userId={profile.id}
-                  />
+                <View className="p-8 items-center">
+                  <MaterialIcons name="login" size={48} color="#71767b" />
+                  <Text className="text-lg font-medium text-white mt-4">
+                    Login Required
+                  </Text>
+                  <Text className="text-gray-400 text-center mt-2">
+                    You need to be logged in to view this user's posts.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate("Login")}
+                    className="bg-blue-500 px-6 py-3 rounded-lg mt-4"
+                  >
+                    <Text className="text-white font-medium">Log In</Text>
+                  </TouchableOpacity>
                 </View>
               )}
             </View>
 
-            {/* Stats */}
-            <View className="mb-6">
-              <UserStats
-                userId={profile.id}
-                postsCount={posts.length}
-                followersCount={profile.followersCount}
-                followingCount={profile.followingCount}
-                onFollowChange={handleStatsChange}
-              />
-            </View>
-
-            {/* Badges Section */}
-            <View className="mb-6">
-              <UserBadges
-                userId={profile.id}
-                isCurrentUser={isCurrentUserProfile}
-              />
-            </View>
-          </View>
-
-          {/* Secondary Navigation Tabs - Match ProfileScreen exactly */}
-          <View className="border-b border-gray-800">
-            <View className="px-4">
-              <View className="flex-row">
-                <TouchableOpacity
-                  className="mr-8 pb-4"
-                  onPress={() => setActivePostTab("posts")}
-                >
-                  <Text
-                    className={`font-semibold text-base ${
-                      activePostTab === "posts" ? "text-white" : "text-gray-400"
-                    }`}
-                  >
-                    Posts
-                  </Text>
-                  {activePostTab === "posts" && (
-                    <View className="mt-2 h-0.5 w-12 bg-blue-500 rounded-full" />
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="mr-8 pb-4"
-                  onPress={() => setActivePostTab("replies")}
-                >
-                  <Text
-                    className={`font-medium text-base ${
-                      activePostTab === "replies"
-                        ? "text-white"
-                        : "text-gray-400"
-                    }`}
-                  >
-                    Replies
-                  </Text>
-                  {activePostTab === "replies" && (
-                    <View className="mt-2 h-0.5 w-12 bg-blue-500 rounded-full" />
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="mr-8 pb-4"
-                  onPress={() => setActivePostTab("media")}
-                >
-                  <Text
-                    className={`font-medium text-base ${
-                      activePostTab === "media" ? "text-white" : "text-gray-400"
-                    }`}
-                  >
-                    Media
-                  </Text>
-                  {activePostTab === "media" && (
-                    <View className="mt-2 h-0.5 w-12 bg-blue-500 rounded-full" />
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="pb-4"
-                  onPress={() => setActivePostTab("likes")}
-                >
-                  <Text
-                    className={`font-medium text-base ${
-                      activePostTab === "likes" ? "text-white" : "text-gray-400"
-                    }`}
-                  >
-                    Likes
-                  </Text>
-                  {activePostTab === "likes" && (
-                    <View className="mt-2 h-0.5 w-12 bg-blue-500 rounded-full" />
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          {/* Posts Section */}
-          <View className="bg-black">
-            {/* Section Title */}
-            <View className="px-4 py-4">
-              <Text className="text-white text-xl font-bold">
-                {profile.displayName || profile.username}'s Posts
-              </Text>
-            </View>
-
-            {/* Posts Content */}
-            {isAuthenticated ? (
-              posts.length > 0 ? (
-                posts.map((post) => (
-                  <View key={post.id}>
-                    <Post post={post} />
-                  </View>
-                ))
-              ) : (
-                <View className="p-8 items-center">
-                  {profile.isPrivate &&
-                  !profile.isFollowing &&
-                  !isCurrentUserProfile ? (
-                    <>
-                      <MaterialIcons name="lock" size={48} color="#71767b" />
-                      <Text className="text-lg font-medium text-white mt-4">
-                        Private Account
-                      </Text>
-                      <Text className="text-gray-400 text-center mt-2">
-                        Follow this user to see their posts.
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <MaterialIcons
-                        name="post-add"
-                        size={48}
-                        color="#71767b"
-                      />
-                      <Text className="text-lg font-medium text-white mt-4">
-                        No posts yet
-                      </Text>
-                      <Text className="text-gray-400 text-center mt-2">
-                        This user hasn't posted anything.
-                      </Text>
-                    </>
-                  )}
-                </View>
-              )
-            ) : (
-              <View className="p-8 items-center">
-                <MaterialIcons name="login" size={48} color="#71767b" />
-                <Text className="text-lg font-medium text-white mt-4">
-                  Login Required
-                </Text>
-                <Text className="text-gray-400 text-center mt-2">
-                  You need to be logged in to view this user's posts.
-                </Text>
-                <TouchableOpacity
-                  onPress={() => navigation.navigate("Login")}
-                  className="bg-blue-500 px-6 py-3 rounded-lg mt-4"
-                >
-                  <Text className="text-white font-medium">Log In</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-
-          {/* Bottom spacing for tab bar */}
-          <View className="h-20" />
-        </ScrollView>
-      ) : (
-        // Dating Profile Content
-        renderDatingProfile()
-      )}
+            {/* Bottom spacing for tab bar */}
+            <View className="h-20" />
+          </ScrollView>
+        ) : (
+          // Dating Profile Content
+          renderDatingProfile()
+        )}
+      </Animated.View>
     </View>
   );
 };

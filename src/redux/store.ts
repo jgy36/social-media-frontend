@@ -1,7 +1,7 @@
 // src/redux/store.ts - React Native with redux-persist
 import { configureStore } from "@reduxjs/toolkit";
-import { persistStore, persistReducer, createTransform } from 'redux-persist';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { persistStore, persistReducer, createTransform } from "redux-persist";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import userReducer from "./slices/userSlice";
 import postReducer from "./slices/postSlice";
 import communityReducer from "./slices/communitySlice";
@@ -13,65 +13,88 @@ import badgeReducer from "./slices/badgeSlice";
 const DebugTransform = createTransform(
   // transform state on its way to being serialized and persisted
   (inboundState, key) => {
-    console.log(`Redux-Persist: Saving state for ${key}`, 
-                JSON.stringify(inboundState).substring(0, 50) + "...");
+    console.log(
+      `Redux-Persist: Saving state for ${key}`,
+      JSON.stringify(inboundState).substring(0, 50) + "..."
+    );
     return inboundState;
   },
   // transform state being rehydrated
   (outboundState, key) => {
-    console.log(`Redux-Persist: Loaded state for ${key}`, 
-                JSON.stringify(outboundState).substring(0, 50) + "...");
+    console.log(
+      `Redux-Persist: Loaded state for ${key}`,
+      JSON.stringify(outboundState).substring(0, 50) + "..."
+    );
     return outboundState;
   }
 );
 
 // Configure persistence for each reducer
 const userPersistConfig = {
-  key: 'user',
+  key: "user",
   storage: AsyncStorage,
-  whitelist: ['id', 'username', 'email', 'displayName', 'bio', 'profileImageUrl', 'isAuthenticated', 'role'],
-  transforms: [DebugTransform], // Add debug transform
-  debug: true, // Enable debug logging
-  timeout: 30000, // 30 seconds timeout
+  whitelist: [
+    "id",
+    "username",
+    "email",
+    "displayName",
+    "bio",
+    "profileImageUrl",
+    "isAuthenticated",
+    "role",
+  ],
+  transforms: [DebugTransform],
+  debug: true,
+  timeout: 30000,
 };
 
 const communitiesPersistConfig = {
-  key: 'communities',
+  key: "communities",
   storage: AsyncStorage,
-  whitelist: ['joinedCommunities', 'featuredCommunities', 'isSidebarOpen'],
+  whitelist: ["joinedCommunities", "featuredCommunities", "isSidebarOpen"],
   debug: true,
   timeout: 30000,
 };
 
 const notificationsPersistConfig = {
-  key: 'notificationPreferences',
+  key: "notificationPreferences",
   storage: AsyncStorage,
-  whitelist: ['preferences', 'communityPreferences'],
+  whitelist: ["preferences", "communityPreferences"],
   debug: true,
   timeout: 30000,
 };
 
 const privacyPersistConfig = {
-  key: 'privacySettings',
+  key: "privacySettings",
   storage: AsyncStorage,
-  whitelist: ['settings'],
+  whitelist: ["settings"],
   debug: true,
   timeout: 30000,
 };
 
 const badgesPersistConfig = {
-  key: 'badges',
+  key: "badges",
   storage: AsyncStorage,
-  whitelist: ['badges', 'initialized'],
+  whitelist: ["badges", "initialized"],
+  blacklist: ["loading", "error"], // Don't persist loading/error states
   debug: true,
-  timeout: 30000, // Increased timeout for badges
+  timeout: 30000,
 };
 
 // Create persisted reducers
 const persistedUserReducer = persistReducer(userPersistConfig, userReducer);
-const persistedCommunityReducer = persistReducer(communitiesPersistConfig, communityReducer);
-const persistedNotificationsReducer = persistReducer(notificationsPersistConfig, notificationPreferencesReducer);
-const persistedPrivacyReducer = persistReducer(privacyPersistConfig, privacySettingsReducer);
+const persistedCommunityReducer = persistReducer(
+  communitiesPersistConfig,
+  communityReducer
+);
+const persistedNotificationsReducer = persistReducer(
+  notificationsPersistConfig,
+  notificationPreferencesReducer
+);
+const persistedPrivacyReducer = persistReducer(
+  privacyPersistConfig,
+  privacySettingsReducer
+);
 const persistedBadgeReducer = persistReducer(badgesPersistConfig, badgeReducer);
 
 // Log when store is being configured
@@ -84,33 +107,34 @@ export const store = configureStore({
     communities: persistedCommunityReducer,
     notificationPreferences: persistedNotificationsReducer,
     privacySettings: persistedPrivacyReducer,
-    badges: persistedBadgeReducer
+    badges: persistedBadgeReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
-      // TEMPORARILY DISABLE these checks for debugging
-      serializableCheck: false,
-      immutableCheck: false,
+      serializableCheck: {
+        ignoredActions: ["persist/PERSIST", "persist/REHYDRATE"],
+      },
+      immutableCheck: {
+        ignoredPaths: ["_persist"],
+      },
       thunk: {
         extraArgument: undefined,
       },
     }),
-  devTools: process.env.NODE_ENV !== 'production',
+  devTools: process.env.NODE_ENV !== "production",
 });
 
 console.log("Store configuration complete, initializing persistor...");
 
-// Create persistor with config options
-export const persistor = persistStore(store, {
-  // No options needed here
-}, () => {
+export const persistor = persistStore(store, {}, () => {
   console.log("Redux store has been persisted and rehydrated");
-  console.log("Current store state:", 
-              JSON.stringify(store.getState().user).substring(0, 100) + "...");
+  console.log(
+    "Current store state:",
+    JSON.stringify(store.getState().user).substring(0, 100) + "..."
+  );
 });
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 
-// Log once everything is set up
 console.log("Redux setup complete");

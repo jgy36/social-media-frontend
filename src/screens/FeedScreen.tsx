@@ -1,5 +1,5 @@
-// src/screens/FeedScreen.tsx - Fixed Modal Layout
-import React, { useState } from "react";
+// src/screens/FeedScreen.tsx - Enhanced with swipeable tabs
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -8,12 +8,17 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  PanResponder,
+  Animated,
+  Dimensions,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
 import { RootState } from "../redux/store";
 import PostList from "../components/feed/PostList";
 import PostForm from "../components/feed/PostForm";
+
+const { width } = Dimensions.get("window");
 
 type FeedTab = "for-you" | "following" | "communities";
 
@@ -23,6 +28,13 @@ const FeedScreen = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const user = useSelector((state: RootState) => state.user);
+  const translateX = useRef(new Animated.Value(0)).current;
+  const activeTabRef = useRef(activeTab);
+
+  // Update ref when tab changes
+  React.useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   // Function to handle post creation and refresh feed
   const handlePostCreated = () => {
@@ -31,11 +43,8 @@ const FeedScreen = () => {
     );
 
     setIsPostModalVisible(false);
-
-    // Trigger refresh by updating the refresh counter
     setRefreshTrigger((prev) => prev + 1);
 
-    // Call the global refresh function for React Native
     if (global.refreshPostList) {
       console.log("🔄 FeedScreen - Calling global refresh function");
       global.refreshPostList();
@@ -49,9 +58,64 @@ const FeedScreen = () => {
     { id: "communities", label: "Communities" },
   ];
 
+  // Pan responder for swipe gestures
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        const isHorizontalSwipe =
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        const isSignificantSwipe = Math.abs(gestureState.dx) > 30;
+        return isHorizontalSwipe && isSignificantSwipe;
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        if (Math.abs(gestureState.dx) < width * 0.3) {
+          translateX.setValue(gestureState.dx * 0.1);
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        const currentTab = activeTabRef.current;
+        const swipeThreshold = 50;
+
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 100,
+          friction: 8,
+        }).start();
+
+        if (gestureState.dx > swipeThreshold) {
+          // Swipe right - go to previous tab
+          if (currentTab === "following") {
+            setActiveTab("for-you");
+          } else if (currentTab === "communities") {
+            setActiveTab("following");
+          }
+        } else if (gestureState.dx < -swipeThreshold) {
+          // Swipe left - go to next tab
+          if (currentTab === "for-you") {
+            setActiveTab("following");
+          } else if (currentTab === "following") {
+            setActiveTab("communities");
+          }
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+      },
+    })
+  ).current;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#000" }}>
-      <View className="flex-1 bg-black">
+      <Animated.View
+        className="flex-1 bg-black"
+        style={{ transform: [{ translateX }] }}
+        {...panResponder.panHandlers}
+      >
         {/* Header - Minimal X-style */}
         <View className="bg-black/95 backdrop-blur-md border-b border-gray-800">
           {/* Top section with logo/title */}
@@ -175,7 +239,7 @@ const FeedScreen = () => {
             </View>
           </KeyboardAvoidingView>
         </Modal>
-      </View>
+      </Animated.View>
     </SafeAreaView>
   );
 };

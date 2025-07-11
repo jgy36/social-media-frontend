@@ -1,11 +1,14 @@
-// src/screens/DatingScreen.tsx
-import React, { useState, useEffect } from "react";
+// src/screens/DatingScreen.tsx - Enhanced with swipeable tabs
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   SafeAreaView,
   Alert,
+  PanResponder,
+  Animated,
+  Dimensions,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -20,6 +23,8 @@ import {
 import SwipeCards from "@/components/dating/SwipeCards";
 import MatchesList from "@/components/dating/MatchesList";
 
+const { width } = Dimensions.get("window");
+
 const DatingScreen = () => {
   const navigation = useNavigation<RootStackNavigationProp>();
   const user = useSelector((state: RootState) => state.user);
@@ -30,6 +35,14 @@ const DatingScreen = () => {
   );
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const translateX = useRef(new Animated.Value(0)).current;
+  const activeTabRef = useRef(activeTab);
+
+  // Update ref when tab changes
+  React.useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   useEffect(() => {
     checkDatingProfile();
@@ -99,6 +112,54 @@ const DatingScreen = () => {
       ]
     );
   };
+
+  // Pan responder for swipe gestures
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        if (!hasCompletedProfile) return false; // Disable swipe if no profile
+        const isHorizontalSwipe =
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        const isSignificantSwipe = Math.abs(gestureState.dx) > 30;
+        return isHorizontalSwipe && isSignificantSwipe;
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        if (Math.abs(gestureState.dx) < width * 0.3) {
+          translateX.setValue(gestureState.dx * 0.1);
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        const currentTab = activeTabRef.current;
+        const swipeThreshold = 50;
+
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 100,
+          friction: 8,
+        }).start();
+
+        if (gestureState.dx > swipeThreshold) {
+          // Swipe right - go to discover
+          if (currentTab === "matches") {
+            setActiveTab("discover");
+          }
+        } else if (gestureState.dx < -swipeThreshold) {
+          // Swipe left - go to matches
+          if (currentTab === "discover") {
+            setActiveTab("matches");
+          }
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+      },
+    })
+  ).current;
 
   if (loading) {
     return (
@@ -170,16 +231,17 @@ const DatingScreen = () => {
           <TouchableOpacity
             onPress={() => setActiveTab("discover")}
             className="mr-8 pb-2"
-            style={
-              activeTab === "discover"
-                ? { borderBottomWidth: 2, borderBottomColor: "#E91E63" }
-                : {}
-            }
+            style={{
+              borderBottomWidth: activeTab === "discover" ? 2 : 0,
+              borderBottomColor:
+                activeTab === "discover" ? "#E91E63" : "transparent",
+            }}
           >
             <Text
-              className={`text-base font-medium ${
-                activeTab === "discover" ? "text-white" : "text-gray-400"
-              }`}
+              className="text-base font-medium"
+              style={{
+                color: activeTab === "discover" ? "#ffffff" : "#9ca3af",
+              }}
             >
               Discover
             </Text>
@@ -188,16 +250,17 @@ const DatingScreen = () => {
           <TouchableOpacity
             onPress={() => setActiveTab("matches")}
             className="pb-2"
-            style={
-              activeTab === "matches"
-                ? { borderBottomWidth: 2, borderBottomColor: "#E91E63" }
-                : {}
-            }
+            style={{
+              borderBottomWidth: activeTab === "matches" ? 2 : 0,
+              borderBottomColor:
+                activeTab === "matches" ? "#E91E63" : "transparent",
+            }}
           >
             <Text
-              className={`text-base font-medium ${
-                activeTab === "matches" ? "text-white" : "text-gray-400"
-              }`}
+              className="text-base font-medium"
+              style={{
+                color: activeTab === "matches" ? "#ffffff" : "#9ca3af",
+              }}
             >
               Matches ({matches.length})
             </Text>
@@ -206,7 +269,11 @@ const DatingScreen = () => {
       </View>
 
       {/* Content */}
-      <View className="flex-1">
+      <Animated.View
+        className="flex-1"
+        style={{ transform: [{ translateX }] }}
+        {...panResponder.panHandlers}
+      >
         {activeTab === "discover" ? (
           <SwipeCards onMatch={handleNewMatch} />
         ) : (
@@ -221,7 +288,7 @@ const DatingScreen = () => {
             }}
           />
         )}
-      </View>
+      </Animated.View>
     </SafeAreaView>
   );
 };

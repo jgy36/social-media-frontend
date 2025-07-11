@@ -1,5 +1,5 @@
-// src/screens/ExploreScreen.tsx
-import React, { useState, useEffect } from "react";
+// src/screens/ExploreScreen.tsx - Enhanced with swipeable tabs
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -9,12 +9,17 @@ import {
   SafeAreaView,
   FlatList,
   Image,
+  PanResponder,
+  Animated,
+  Dimensions,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { RootStackNavigationProp } from "@/navigation/types";
 import { useSearchAll } from "@/hooks/useApi";
 import { searchHashtags } from "@/api/search";
+
+const { width } = Dimensions.get("window");
 
 // Define proper types for search results
 interface ApiSearchResult {
@@ -42,6 +47,13 @@ const ExploreScreen = () => {
   const [searchResults, setSearchResults] = useState<ApiSearchResult[]>([]);
 
   const { loading: searchLoading, execute: search } = useSearchAll();
+  const translateX = useRef(new Animated.Value(0)).current;
+  const activeTabRef = useRef(activeTab);
+
+  // Update ref when tab changes
+  React.useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   useEffect(() => {
     // Load trending hashtags on mount
@@ -69,6 +81,58 @@ const ExploreScreen = () => {
       setSearchResults([]);
     }
   };
+
+  // Pan responder for swipe gestures
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        if (searchQuery.length > 0) return false; // Disable swipe when searching
+        const isHorizontalSwipe =
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        const isSignificantSwipe = Math.abs(gestureState.dx) > 30;
+        return isHorizontalSwipe && isSignificantSwipe;
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        if (Math.abs(gestureState.dx) < width * 0.3) {
+          translateX.setValue(gestureState.dx * 0.1);
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        const currentTab = activeTabRef.current;
+        const swipeThreshold = 50;
+
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 100,
+          friction: 8,
+        }).start();
+
+        if (gestureState.dx > swipeThreshold) {
+          // Swipe right - go to previous tab
+          if (currentTab === "people") {
+            setActiveTab("trending");
+          } else if (currentTab === "hashtags") {
+            setActiveTab("people");
+          }
+        } else if (gestureState.dx < -swipeThreshold) {
+          // Swipe left - go to next tab
+          if (currentTab === "trending") {
+            setActiveTab("people");
+          } else if (currentTab === "people") {
+            setActiveTab("hashtags");
+          }
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+      },
+    })
+  ).current;
 
   const renderSearchResult = ({ item }: { item: ApiSearchResult }) => (
     <TouchableOpacity
@@ -134,6 +198,46 @@ const ExploreScreen = () => {
     </TouchableOpacity>
   );
 
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "trending":
+        return (
+          <View className="p-4">
+            <Text className="text-white text-lg font-semibold mb-4">
+              Trending Now
+            </Text>
+            <View className="flex-row flex-wrap">
+              {trendingHashtags.map(renderTrendingHashtag)}
+            </View>
+          </View>
+        );
+      case "people":
+        return (
+          <View className="p-4">
+            <Text className="text-white text-lg font-semibold mb-4">
+              People You May Know
+            </Text>
+            <Text className="text-gray-400 text-center py-8">
+              Coming soon! We'll suggest people based on your interests.
+            </Text>
+          </View>
+        );
+      case "hashtags":
+        return (
+          <View className="p-4">
+            <Text className="text-white text-lg font-semibold mb-4">
+              Popular Hashtags
+            </Text>
+            <View className="flex-row flex-wrap">
+              {trendingHashtags.map(renderTrendingHashtag)}
+            </View>
+          </View>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-black">
       {/* Header */}
@@ -167,7 +271,11 @@ const ExploreScreen = () => {
       </View>
 
       {/* Content */}
-      <View className="flex-1">
+      <Animated.View
+        className="flex-1"
+        style={{ transform: [{ translateX }] }}
+        {...panResponder.panHandlers}
+      >
         {searchQuery.length > 0 ? (
           // Search Results
           <View className="flex-1">
@@ -192,14 +300,18 @@ const ExploreScreen = () => {
                 <TouchableOpacity
                   key={tab}
                   onPress={() => setActiveTab(tab as any)}
-                  className={`mr-6 pb-2 ${
-                    activeTab === tab ? "border-b-2 border-pink-500" : ""
-                  }`}
+                  className="mr-6 pb-2"
+                  style={{
+                    borderBottomWidth: activeTab === tab ? 2 : 0,
+                    borderBottomColor:
+                      activeTab === tab ? "#E91E63" : "transparent",
+                  }}
                 >
                   <Text
-                    className={`text-base font-medium capitalize ${
-                      activeTab === tab ? "text-white" : "text-gray-400"
-                    }`}
+                    className="text-base font-medium capitalize"
+                    style={{
+                      color: activeTab === tab ? "#ffffff" : "#9ca3af",
+                    }}
                   >
                     {tab}
                   </Text>
@@ -207,44 +319,11 @@ const ExploreScreen = () => {
               ))}
             </View>
 
-            {/* Trending Hashtags */}
-            {activeTab === "trending" && (
-              <View className="p-4">
-                <Text className="text-white text-lg font-semibold mb-4">
-                  Trending Now
-                </Text>
-                <View className="flex-row flex-wrap">
-                  {trendingHashtags.map(renderTrendingHashtag)}
-                </View>
-              </View>
-            )}
-
-            {/* Suggested People */}
-            {activeTab === "people" && (
-              <View className="p-4">
-                <Text className="text-white text-lg font-semibold mb-4">
-                  People You May Know
-                </Text>
-                <Text className="text-gray-400 text-center py-8">
-                  Coming soon! We'll suggest people based on your interests.
-                </Text>
-              </View>
-            )}
-
-            {/* Popular Hashtags */}
-            {activeTab === "hashtags" && (
-              <View className="p-4">
-                <Text className="text-white text-lg font-semibold mb-4">
-                  Popular Hashtags
-                </Text>
-                <View className="flex-row flex-wrap">
-                  {trendingHashtags.map(renderTrendingHashtag)}
-                </View>
-              </View>
-            )}
+            {/* Tab Content */}
+            {renderTabContent()}
           </ScrollView>
         )}
-      </View>
+      </Animated.View>
     </SafeAreaView>
   );
 };
