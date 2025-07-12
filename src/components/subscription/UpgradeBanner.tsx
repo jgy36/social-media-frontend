@@ -1,26 +1,32 @@
+// src/components/subscription/UpgradeBanner.tsx - Updated
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
+import { useSelector } from "react-redux";
+import { RootState } from "../../redux/store";
+import SubscriptionManager from "./SubscriptionManager";
 
 interface UpgradeBannerProps {
-  currentTier?: string;
   mode?: "social" | "dating";
   onPress?: () => void;
 }
 
 const UpgradeBanner: React.FC<UpgradeBannerProps> = ({
-  currentTier = "Free",
   mode = "dating",
   onPress,
 }) => {
   const navigation = useNavigation();
+  const { current: subscription } = useSelector(
+    (state: RootState) => state.subscription
+  );
+
+  const currentTier = subscription?.tier || "FREE";
 
   const handlePress = () => {
     if (onPress) {
       onPress();
     } else {
-      // Safe navigation
       try {
         (navigation as any).navigate("SubscriptionPlans");
       } catch (error) {
@@ -29,12 +35,12 @@ const UpgradeBanner: React.FC<UpgradeBannerProps> = ({
     }
   };
 
-  // Don't show banner for paid users
-  if (currentTier !== "Free") {
-    return null;
+  // Show subscription manager for paid users
+  if (currentTier !== "FREE") {
+    return <SubscriptionManager onManagePress={onPress} />;
   }
 
-  // Different content based on mode
+  // Show upgrade banner for free users
   const getContent = () => {
     if (mode === "social") {
       return {
@@ -54,11 +60,11 @@ const UpgradeBanner: React.FC<UpgradeBannerProps> = ({
   return (
     <LinearGradient
       colors={["#FF6B9D", "#FF8E8E", "#FFB347"]}
-      className="mx-4 mt-4 mb-4" // Increased margins for more spacing
+      className="mx-4 mt-4 mb-4"
       style={{
         borderRadius: 16,
-        padding: 16, // Increased padding
-        minHeight: 80, // Increased height to accommodate text wrapping
+        padding: 16,
+        minHeight: 80,
       }}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
@@ -69,7 +75,7 @@ const UpgradeBanner: React.FC<UpgradeBannerProps> = ({
             className="text-white font-bold mb-1"
             style={{
               fontSize: 16,
-              lineHeight: 20, // Better line height for readability
+              lineHeight: 20,
             }}
             numberOfLines={1}
           >
@@ -79,9 +85,9 @@ const UpgradeBanner: React.FC<UpgradeBannerProps> = ({
             className="text-white/90"
             style={{
               fontSize: 12,
-              lineHeight: 16, // Better line height for wrapping
+              lineHeight: 16,
             }}
-            numberOfLines={2} // Allow 2 lines for text wrapping
+            numberOfLines={2}
           >
             {content.subtitle}
           </Text>
@@ -91,9 +97,9 @@ const UpgradeBanner: React.FC<UpgradeBannerProps> = ({
           style={{
             borderRadius: 10,
             paddingHorizontal: 18,
-            paddingVertical: 12, // Slightly taller button
+            paddingVertical: 12,
             minWidth: 75,
-            alignSelf: "center", // Center the button vertically
+            alignSelf: "center",
           }}
           onPress={handlePress}
           activeOpacity={0.8}

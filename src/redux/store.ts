@@ -8,6 +8,7 @@ import communityReducer from "./slices/communitySlice";
 import notificationPreferencesReducer from "./slices/notificationPreferencesSlice";
 import privacySettingsReducer from "./slices/privacySettingsSlice";
 import badgeReducer from "./slices/badgeSlice";
+import subscriptionReducer from "./slices/subscriptionSlice"; // ADD THIS
 
 // Debug transform to log data being persisted
 const DebugTransform = createTransform(
@@ -81,6 +82,16 @@ const badgesPersistConfig = {
   timeout: 30000,
 };
 
+// ADD THIS - Subscription persistence config
+const subscriptionPersistConfig = {
+  key: "subscription",
+  storage: AsyncStorage,
+  whitelist: ["current", "tiers", "stripePublishableKey"],
+  blacklist: ["loading", "error", "usage"], // Don't persist loading/error/usage states
+  debug: true,
+  timeout: 30000,
+};
+
 // Create persisted reducers
 const persistedUserReducer = persistReducer(userPersistConfig, userReducer);
 const persistedCommunityReducer = persistReducer(
@@ -96,6 +107,10 @@ const persistedPrivacyReducer = persistReducer(
   privacySettingsReducer
 );
 const persistedBadgeReducer = persistReducer(badgesPersistConfig, badgeReducer);
+const persistedSubscriptionReducer = persistReducer(
+  subscriptionPersistConfig,
+  subscriptionReducer
+); // ADD THIS
 
 // Log when store is being configured
 console.log("Configuring Redux store...");
@@ -108,6 +123,7 @@ export const store = configureStore({
     notificationPreferences: persistedNotificationsReducer,
     privacySettings: persistedPrivacyReducer,
     badges: persistedBadgeReducer,
+    subscription: persistedSubscriptionReducer, // ADD THIS
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

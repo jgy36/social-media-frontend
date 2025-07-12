@@ -43,6 +43,11 @@ import UserProfileScreen from "./src/screens/UserProfileScreen";
 import ProfileEditScreen from "./src/screens/ProfileEditScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
 import SubscriptionPlansScreen from "./src/screens/SubscriptionPlansScreen";
+import PaymentScreen from "./src/screens/PaymentScreen";
+import {
+  fetchCurrentSubscription,
+  fetchSubscriptionTiers,
+} from "./src/redux/slices/subscriptionSlice";
 
 import FollowRequestsScreen from "./src/screens/FollowRequestsScreen";
 import CommunitiesListScreen from "./src/screens/community/CommunitiesListScreen";
@@ -226,9 +231,12 @@ function AuthPersistence({ children }: { children: React.ReactNode }) {
         // Only try to restore state if we already have a token
         await dispatch(restoreAuthState()).unwrap();
 
-        // Initialize badges if authenticated
+        // Initialize badges and subscription data if authenticated
         if (store.getState().user.isAuthenticated) {
           dispatch(initializeBadges());
+          // ADD THESE LINES
+          dispatch(fetchSubscriptionTiers());
+          dispatch(fetchCurrentSubscription());
         }
       } catch (error) {
         console.error("Error initializing app:", error);
@@ -373,6 +381,15 @@ function AppNavigator() {
                 presentation: "modal", // Optional: makes it appear as a modal
                 headerStyle: { backgroundColor: "#000" },
                 headerTintColor: "#fff",
+              }}
+            />
+            {/* ADD THIS NEW SCREEN */}
+            <Stack.Screen
+              name="Payment"
+              component={PaymentScreen}
+              options={{
+                headerShown: false,
+                presentation: "modal",
               }}
             />
             <Stack.Screen

@@ -1,4 +1,4 @@
-// src/screens/ProfileScreen.tsx - Enhanced with swipeable tabs and modal awareness
+// src/screens/ProfileScreen.tsx - Enhanced with swipeable tabs and tier badges
 import { MaterialIcons } from "@expo/vector-icons";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
@@ -22,6 +22,7 @@ import {
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getCurrentDatingProfile, isDatingProfileComplete } from "@/api/dating";
+import { LinearGradient } from "expo-linear-gradient";
 
 import UserBadges from "../components/profile/UserBadges";
 import UserStats from "../components/profile/UserStats";
@@ -53,6 +54,44 @@ type ProfileScreenNavigationProp = CompositeNavigationProp;
 BottomTabNavigationProp<TabParamList, "Profile">,
   NativeStackNavigationProp<RootStackParamList>;
 
+// Tier styling helper function
+const getTierStyling = (tier: string) => {
+  switch (tier) {
+    case "ESSENTIAL":
+      return {
+        gradientColors: ["#3B82F6", "#60A5FA", "#93C5FD"], // Blue gradient
+        textColor: "#1E40AF",
+        borderColor: "#3B82F6",
+        badgeText: "💎 Essential",
+        badgeGradient: ["#2563EB", "#3B82F6"],
+      };
+    case "PREMIUM":
+      return {
+        gradientColors: ["#C0C0C0", "#E5E5E5", "#F8F8FF"], // Silver gradient
+        textColor: "#4B5563",
+        borderColor: "#C0C0C0",
+        badgeText: "🥈 Premium",
+        badgeGradient: ["#6B7280", "#9CA3AF"],
+      };
+    case "VIP":
+      return {
+        gradientColors: ["#FFD700", "#FFA500", "#FFFF99"], // Gold gradient
+        textColor: "#B8860B",
+        borderColor: "#FFD700",
+        badgeText: "🥇 VIP",
+        badgeGradient: ["#D97706", "#F59E0B"],
+      };
+    default: // FREE
+      return {
+        gradientColors: ["#FFFFFF", "#F9FAFB", "#FFFFFF"], // White/light gray
+        textColor: "#374151",
+        borderColor: "#E5E7EB",
+        badgeText: "🆓 Free",
+        badgeGradient: ["#6B7280", "#9CA3AF"],
+      };
+  }
+};
+
 // Silent error boundary - keeps components working without visible errors
 const ErrorBoundary = ({
   children,
@@ -72,6 +111,9 @@ const ErrorBoundary = ({
 const ProfileScreen = () => {
   const navigation = useNavigation<ProfileScreenNavigationProp>();
   const user = useSelector((state: RootState) => state.user);
+  const { current: subscription } = useSelector(
+    (state: RootState) => state.subscription
+  );
   const [activeTab, setActiveTab] = useState<"social" | "dating">("social");
   const [datingProfile, setDatingProfile] = useState<any>(null);
   const [hasDatingProfile, setHasDatingProfile] = useState(false);
@@ -80,6 +122,9 @@ const ProfileScreen = () => {
   const translateX = useRef(new Animated.Value(0)).current;
   const activeTabRef = useRef(activeTab);
   const isModalOpenRef = useRef(isModalOpen);
+
+  // Get tier styling
+  const tierStyling = getTierStyling(subscription?.tier || "FREE");
 
   // Update refs when values change
   React.useEffect(() => {
@@ -128,7 +173,10 @@ const ProfileScreen = () => {
     useCallback(() => {
       console.log("📱 ProfileScreen focused - refreshing profile");
       checkDatingProfile();
-    }, [checkDatingProfile])
+
+      // ADD THIS: Refresh subscription data when screen focuses
+      dispatch(fetchCurrentSubscription());
+    }, [checkDatingProfile, dispatch])
   );
 
   // Safe navigation helper
@@ -316,15 +364,13 @@ const ProfileScreen = () => {
           {activeTab === "social" ? (
             // Social Media Profile
             <View className="pt-4">
-              {/* Social Upgrade Banner - moved to top above everything with top padding */}
+              {/* Social Upgrade Banner */}
               <UpgradeBanner
-                currentTier="Free"
                 mode="social"
                 onPress={navigateToSubscriptionPlans}
               />
 
               <View className="px-4 pt-3 pb-2">
-                {/* Increased top padding for more spacing below banner */}
                 {/* Profile Header - Redesigned with settings icon */}
                 <View className="flex-row items-start mb-4">
                   {/* Larger Profile Image */}
@@ -340,9 +386,44 @@ const ProfileScreen = () => {
                   {/* Name and Username next to image */}
                   <View className="flex-1 justify-center">
                     <View className="flex-row items-center justify-between mb-1">
-                      <Text className="text-2xl font-bold text-white">
-                        {user.displayName || user.username}
-                      </Text>
+                      <View className="flex-row items-center flex-1">
+                        <Text className="text-2xl font-bold text-white mr-2">
+                          {user.displayName || user.username}
+                        </Text>
+
+                        {/* Tier Badge */}
+                        {subscription?.tier && subscription.tier !== "FREE" && (
+                          <View className="flex-row items-center">
+                            <LinearGradient
+                              colors={tierStyling.badgeGradient}
+                              className="px-3 py-1 rounded-full"
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 0 }}
+                              style={{
+                                shadowColor: tierStyling.borderColor,
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 4,
+                                elevation: 3,
+                              }}
+                            >
+                              <Text className="text-white text-xs font-bold">
+                                {subscription.tier}
+                              </Text>
+                            </LinearGradient>
+
+                            {/* Add cancellation indicator */}
+                            {subscription.cancelAtPeriodEnd && (
+                              <View className="ml-2 bg-red-500 px-2 py-1 rounded-full">
+                                <Text className="text-white text-xs font-bold">
+                                  ENDING
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        )}
+                      </View>
+
                       <TouchableOpacity
                         onPress={navigateToSettings}
                         className="p-2"
@@ -483,10 +564,9 @@ const ProfileScreen = () => {
                     </TouchableOpacity>
                   </View>
 
-                  {/* Dating Upgrade Banner - prominently placed after edit button */}
+                  {/* Dating Upgrade Banner */}
                   <View className="mt-3">
                     <UpgradeBanner
-                      currentTier="Free"
                       mode="dating"
                       onPress={navigateToSubscriptionPlans}
                     />
@@ -501,7 +581,6 @@ const ProfileScreen = () => {
 
                   {/* Move Name Above First Photo */}
                   <View className="mx-4 mt-6">
-                    {/* Increased top margin for more spacing */}
                     <Text className="text-3xl font-bold text-gray-800 mb-2">
                       {user.displayName || user.username}, {datingProfile.age}
                     </Text>
@@ -723,17 +802,14 @@ const ProfileScreen = () => {
               ) : (
                 // No Dating Profile - Setup Prompt
                 <View className="items-center py-8 px-4">
-                  {/* Reduced top padding since banner takes up more space */}
                   {/* Upgrade banner in empty state too */}
                   <View className="w-full mb-8">
                     <UpgradeBanner
-                      currentTier="Free"
                       mode="dating"
                       onPress={navigateToSubscriptionPlans}
                     />
                   </View>
                   <View className="mt-4">
-                    {/* Added spacing between banner and icon */}
                     <MaterialIcons name="favorite" size={80} color="#E91E63" />
                   </View>
                   <Text className="text-gray-800 text-2xl font-bold text-center mt-6 mb-4">

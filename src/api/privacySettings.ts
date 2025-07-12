@@ -5,7 +5,7 @@ import { apiClient, safeApiCall } from "./apiClient";
  * Interface for privacy settings (updated for social media + dating app)
  */
 export interface PrivacySettings {
-  publicProfile: boolean; // This should map to 'public_profile' in DB
+  profilePublic: boolean; // This should map to 'public_profile' in DB
   showPoliticalAffiliation: boolean;
   showPostHistory: boolean;
   showVotingRecord: boolean;
@@ -26,7 +26,7 @@ export interface PrivacySettings {
  * Default privacy settings (updated)
  */
 export const defaultPrivacySettings: PrivacySettings = {
-  publicProfile: true, // Make sure this is explicitly set
+  profilePublic: true, // Make sure this is explicitly set
   showPoliticalAffiliation: false,
   showPostHistory: true,
   showVotingRecord: false,

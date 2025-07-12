@@ -13,8 +13,11 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import { RootState } from "@/redux/store";
+import type {
+  RootStackNavigationProp,
+  PhotoConversationRouteProp,
+} from "@/navigation/types";
 import { getPhotoMessageConversation } from "@/api/photoMessages";
-import { users } from "@/api";
 
 interface PhotoMessage {
   id: number;
@@ -37,9 +40,9 @@ interface PhotoMessage {
 }
 
 const PhotoConversationScreen = () => {
-  const navigation = useNavigation();
-  const route = useRoute();
-  const { userId } = route.params as { userId: number };
+  const navigation = useNavigation<RootStackNavigationProp>();
+  const route = useRoute<PhotoConversationRouteProp>();
+  const { userId } = route.params;
   const currentUser = useSelector((state: RootState) => state.user);
 
   const [messages, setMessages] = useState<PhotoMessage[]>([]);
