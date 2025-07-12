@@ -99,13 +99,20 @@ export interface PreferencesUpdateResponse {
 // MATCHING & SWIPING TYPES
 // ============================================================================
 
-export type SwipeDirection = "LIKE" | "PASS";
+export type SwipeDirection = "LIKE" | "PASS" | "SUPER_LIKE"; // ADD SUPER_LIKE
 
 export interface SwipeResponse {
   success: boolean;
   matched: boolean;
   match?: Match;
+  superLike?: boolean; // ADD this field
   error?: string;
+}
+
+export interface SwipeAction {
+  targetUserId: number;
+  direction: SwipeDirection;
+  timestamp: number;
 }
 
 export interface Match {

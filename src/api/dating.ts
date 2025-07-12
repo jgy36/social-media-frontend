@@ -376,9 +376,9 @@ export const updatePhotoOrder = async (photoUrls: string[]): Promise<void> => {
 /**
  * Get potential matches for swiping
  */
-export const getPotentialMatches = async (): Promise<DatingProfile[]> => {
+export const getPotentialMatches = async (): Promise<PotentialMatch[]> => {
   return safeApiCall(async () => {
-    const response = await apiClient.get<DatingProfile[]>(
+    const response = await apiClient.get<PotentialMatch[]>(
       "/dating/potential-matches"
     );
     return response.data;

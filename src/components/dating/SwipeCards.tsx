@@ -1,4 +1,4 @@
-// src/components/dating/SwipeCards.tsx - EXACT ProfileScreen Layout + FIXED swiping + FIXED buttons
+// src/components/dating/SwipeCards.tsx - FIXED VERSION that works with your current setup
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -11,11 +11,12 @@ import {
   ScrollView,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { getPotentialMatches, swipeUser } from "@/api/dating";
+import { useSelector, useDispatch } from "react-redux";
+import { RootState, AppDispatch } from "@/redux/store";
+import { getPotentialMatches, swipeUser } from "@/api/dating"; // Use your existing API
 import { DatingProfile } from "@/types/dating";
-import { useSelector } from "react-redux";
-import { RootState } from "@/redux/store";
 import MatchCelebrationModal from "@/components/dating/MatchCelebrationModal";
+import PaywallModal from "@/components/subscription/PaywallModal";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 const CARD_WIDTH = screenWidth - 32;
@@ -26,18 +27,22 @@ interface SwipeCardsProps {
 }
 
 const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
+  const dispatch = useDispatch<AppDispatch>();
+  const currentUser = useSelector((state: RootState) => state.user);
+  const { current: subscription } = useSelector(
+    (state: RootState) => state.subscription
+  );
+
+  // Local state instead of Redux for now
   const [profiles, setProfiles] = useState<DatingProfile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-
-  // Match celebration state
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [matchData, setMatchData] = useState<any>(null);
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [paywallFeature, setPaywallFeature] = useState<string | null>(null);
 
-  // Get current user
-  const currentUser = useSelector((state: RootState) => state.user);
-
-  // Animation values only for card transitions
+  // Animation values
   const cardOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -49,14 +54,8 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
       setLoading(true);
       console.log("🔍 Loading potential matches...");
       const matches = await getPotentialMatches();
-      console.log("📊 API returned:", matches);
-      console.log("📊 Number of profiles:", matches?.length || 0);
-
-      if (matches && matches.length > 0) {
-        console.log("📊 First profile:", matches[0]);
-      }
-
-      setProfiles(matches);
+      console.log("📊 API returned:", matches?.length || 0, "profiles");
+      setProfiles(matches || []);
     } catch (error) {
       console.error("❌ Error loading matches:", error);
       Alert.alert(
@@ -68,47 +67,142 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
     }
   };
 
+  const canUserSuperLike = () => {
+    if (!subscription) return false;
+
+    const tier = subscription.tier;
+    const superLikesUsed = subscription.dailySuperLikesUsed || 0;
+    let superLikeLimit = 1; // Free tier default
+
+    switch (tier) {
+      case "ESSENTIAL":
+        superLikeLimit = 3;
+        break;
+      case "PREMIUM":
+        superLikeLimit = 5;
+        break;
+      case "VIP":
+        superLikeLimit = 10;
+        break;
+    }
+
+    const canUse = superLikesUsed < superLikeLimit;
+    console.log("🌟 Super Like Check:", {
+      tier,
+      superLikesUsed,
+      superLikeLimit,
+      canUse,
+    });
+
+    return canUse;
+  };
+
   const handleSwipe = async (direction: "LIKE" | "PASS") => {
-    if (currentIndex >= profiles.length) return;
+    if (currentIndex >= profiles.length) {
+      console.log("❌ No more profiles to swipe");
+      return;
+    }
 
     const currentProfile = profiles[currentIndex];
+    console.log(
+      `🎯 ${direction} on ${currentProfile.user?.username || "unknown user"}`
+    );
 
-    console.log(`🎯 ${direction} on ${currentProfile.user.username}`);
-
-    // Simple fade out animation
+    // Animate card out
     Animated.timing(cardOpacity, {
       toValue: 0,
       duration: 200,
       useNativeDriver: false,
     }).start(() => {
-      console.log("✅ Moving to next card");
-      // Reset opacity and move to next card
       cardOpacity.setValue(1);
       setCurrentIndex((prev) => prev + 1);
     });
 
     try {
-      // Call API
-      const response = await swipeUser(currentProfile.user.id, direction);
+      // Use your existing API
+      const response = await swipeUser(
+        currentProfile.user?.id || currentProfile.id,
+        direction
+      );
+      console.log("📡 Swipe response:", response);
 
-      // Check for match - this is the key integration!
+      // Check for match
       if (response.matched && response.match) {
         console.log("🎉 IT'S A MATCH!", response.match);
-
-        // Set match data for celebration modal
         setMatchData(response.match);
         setShowMatchModal(true);
-
-        // Also call the original onMatch callback
         onMatch(response.match);
       }
     } catch (error) {
-      console.error("Failed to swipe:", error);
+      console.error("❌ Failed to swipe:", error);
       Alert.alert("Error", "Failed to record swipe. Please try again.");
     }
   };
 
-  // Parse JSON fields safely
+  const handleSuperLike = async () => {
+    if (currentIndex >= profiles.length) return;
+
+    const currentProfile = profiles[currentIndex];
+    console.log(
+      `⭐ SUPER LIKE on ${currentProfile.user?.username || "unknown user"}`
+    );
+
+    // Check if user can super like
+    if (!canUserSuperLike()) {
+      console.log("🚫 Super like not allowed - showing paywall");
+      setPaywallFeature("super_like");
+      setShowPaywallModal(true);
+      return;
+    }
+
+    // For now, treat super like as a regular like until backend supports it
+    console.log(
+      "⭐ Sending super like as regular like (backend doesn't support SUPER_LIKE yet)"
+    );
+
+    // Animate card out
+    Animated.timing(cardOpacity, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start(() => {
+      cardOpacity.setValue(1);
+      setCurrentIndex((prev) => prev + 1);
+    });
+
+    try {
+      // Send as regular like for now
+      const response = await swipeUser(
+        currentProfile.user?.id || currentProfile.id,
+        "LIKE"
+      );
+      console.log("📡 Super like response:", response);
+
+      // Show super like feedback
+      Alert.alert(
+        "Super Like Sent! ⭐",
+        `${
+          currentProfile.user?.displayName ||
+          currentProfile.user?.username ||
+          "This person"
+        } will see that you super liked them!`,
+        [{ text: "Awesome!" }]
+      );
+
+      // Check for match
+      if (response.matched && response.match) {
+        console.log("🎉 IT'S A MATCH from super like!", response.match);
+        setMatchData(response.match);
+        setShowMatchModal(true);
+        onMatch(response.match);
+      }
+    } catch (error) {
+      console.error("❌ Failed to super like:", error);
+      Alert.alert("Error", "Failed to send super like. Please try again.");
+    }
+  };
+
+  // Parse JSON fields safely (keeping your existing logic)
   const parseJsonField = (field: any) => {
     if (!field) return [];
     if (Array.isArray(field)) {
@@ -133,34 +227,37 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
         style={{ backgroundColor: "#f8f9fa" }}
         scrollEnabled={true}
       >
-        {/* Name Above First Photo - EXACTLY like ProfileScreen */}
+        {/* Name Above First Photo */}
         <View className="mx-4 mt-4">
           <Text className="text-3xl font-bold text-gray-800 mb-2">
-            {profile.user.displayName || profile.user.username}, {profile.age}
+            {profile.user?.displayName || profile.user?.username || "Unknown"},{" "}
+            {profile.age}
           </Text>
         </View>
 
-        {/* First Photo Card - EXACTLY like ProfileScreen */}
+        {/* First Photo Card */}
         <View className="mx-4 mt-4 bg-white rounded-3xl overflow-hidden shadow-lg">
           <Image
             source={{
               uri:
                 (profile.photos && profile.photos[0]) ||
-                `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.user.username}`,
+                `https://api.dicebear.com/7.x/avataaars/svg?seed=${
+                  profile.user?.username || "default"
+                }`,
             }}
             className="w-full h-[450px]"
             resizeMode="cover"
           />
         </View>
 
-        {/* Bio Card - EXACTLY like ProfileScreen */}
+        {/* Bio Card */}
         <View className="mx-4 mt-4 bg-white rounded-3xl p-6 shadow-lg">
           <Text className="text-gray-800 text-lg leading-6">{profile.bio}</Text>
         </View>
 
-        {/* Combined Vitals, Lifestyle & Looking For Card - EXACTLY like ProfileScreen */}
+        {/* Combined Vitals, Lifestyle & Looking For Card */}
         <View className="mx-4 mt-4 bg-white rounded-3xl p-6 shadow-lg">
-          {/* Vitals Section (stacked, no bubbles) */}
+          {/* Basic info */}
           <View className="space-y-3 mb-6">
             {profile.height && (
               <View className="flex-row items-center">
@@ -188,86 +285,7 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
                 </Text>
               </View>
             )}
-
-            {profile.hasChildren && (
-              <View className="flex-row items-center">
-                <MaterialIcons name="child-care" size={20} color="#666" />
-                <Text className="ml-3 text-gray-800 text-base">
-                  {profile.hasChildren}
-                </Text>
-              </View>
-            )}
-
-            {profile.wantChildren && (
-              <View className="flex-row items-center">
-                <MaterialIcons name="favorite" size={20} color="#666" />
-                <Text className="ml-3 text-gray-800 text-base">
-                  {profile.wantChildren}
-                </Text>
-              </View>
-            )}
-
-            {profile.drinking && (
-              <View className="flex-row items-center">
-                <Text className="text-gray-800 text-base mr-3">🍷</Text>
-                <Text className="text-gray-800 text-base">
-                  {profile.drinking}
-                </Text>
-              </View>
-            )}
-
-            {profile.smoking && profile.smoking !== "No" && (
-              <View className="flex-row items-center">
-                <Text className="text-gray-800 text-base mr-3">🚬</Text>
-                <Text className="text-gray-800 text-base">
-                  {profile.smoking}
-                </Text>
-              </View>
-            )}
-
-            {profile.drugs && profile.drugs !== "No" && (
-              <View className="flex-row items-center">
-                <MaterialIcons name="local-pharmacy" size={20} color="#666" />
-                <Text className="ml-3 text-gray-800 text-base">
-                  {profile.drugs} drugs
-                </Text>
-              </View>
-            )}
           </View>
-
-          {/* Lifestyle Section (stacked, no bubbles) */}
-          {(profile.religion ||
-            profile.relationshipType ||
-            profile.lifestyle) && (
-            <View className="space-y-3 mb-6 pt-4 border-t border-gray-200">
-              {profile.religion && (
-                <View className="flex-row items-center">
-                  <MaterialIcons name="church" size={20} color="#666" />
-                  <Text className="ml-3 text-gray-800 text-base">
-                    {profile.religion}
-                  </Text>
-                </View>
-              )}
-
-              {profile.relationshipType && (
-                <View className="flex-row items-center">
-                  <MaterialIcons name="favorite" size={20} color="#666" />
-                  <Text className="ml-3 text-gray-800 text-base">
-                    {profile.relationshipType}
-                  </Text>
-                </View>
-              )}
-
-              {profile.lifestyle && (
-                <View className="flex-row items-center">
-                  <MaterialIcons name="people" size={20} color="#666" />
-                  <Text className="ml-3 text-gray-800 text-base">
-                    {profile.lifestyle}
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
 
           {/* Looking For Section */}
           {profile.lookingFor && (
@@ -281,34 +299,6 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
             </View>
           )}
         </View>
-
-        {/* Additional Photos with Prompts Between - EXACTLY like ProfileScreen */}
-        {profile.photos &&
-          profile.photos.length > 1 &&
-          profile.photos.slice(1).map((photo: string, index: number) => (
-            <View key={`photo-section-${index}`}>
-              {/* Photo Card */}
-              <View className="mx-4 mt-4 bg-white rounded-3xl overflow-hidden shadow-lg">
-                <Image
-                  source={{ uri: photo }}
-                  className="w-full h-[450px]"
-                  resizeMode="cover"
-                />
-              </View>
-
-              {/* Prompt Card (if available) */}
-              {prompts && prompts[index] && prompts[index].question && (
-                <View className="mx-4 mt-4 bg-white rounded-3xl p-6 shadow-lg">
-                  <Text className="text-gray-600 text-sm font-medium mb-2">
-                    {prompts[index].question}
-                  </Text>
-                  <Text className="text-gray-800 text-lg leading-6">
-                    {prompts[index].answer}
-                  </Text>
-                </View>
-              )}
-            </View>
-          ))}
 
         {/* Bottom spacing for buttons */}
         <View className="h-32" />
@@ -324,12 +314,10 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
 
     const cardStyle = isTopCard
       ? {
-          // Top card - simple opacity animation
           opacity: cardOpacity,
           zIndex: 1000,
         }
       : {
-          // Background cards - static positioning
           transform: [
             { scale: 1 - cardPosition * 0.05 },
             { translateY: cardPosition * 8 },
@@ -358,7 +346,6 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
           cardStyle,
         ]}
       >
-        {/* Profile Content - Your EXACT ProfileScreen Layout */}
         {renderProfileContent(profile)}
       </Animated.View>
     );
@@ -406,7 +393,7 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
           )}
       </View>
 
-      {/* BUTTONS - Positioned even lower on screen */}
+      {/* SIMPLIFIED BUTTONS that actually work */}
       <View
         style={{
           position: "absolute",
@@ -420,9 +407,36 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
           zIndex: 2000,
         }}
       >
+        <TouchableOpacity
+          onPress={() => {
+            console.log("🧪 Testing paywall modal");
+            setPaywallFeature("super_like");
+            setShowPaywallModal(true);
+          }}
+          style={{
+            position: "absolute",
+            top: -80, // Position above the other buttons
+            left: "50%",
+            marginLeft: -40,
+            width: 80,
+            height: 30,
+            backgroundColor: "#FF6B9D",
+            borderRadius: 15,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={{ color: "white", fontSize: 12, fontWeight: "bold" }}>
+            Test Paywall
+          </Text>
+        </TouchableOpacity>
         {/* RED X BUTTON */}
         <TouchableOpacity
-          onPress={() => handleSwipe("PASS")}
+          onPress={() => {
+            console.log("❌ PASS button pressed");
+            handleSwipe("PASS");
+          }}
           style={{
             width: 70,
             height: 70,
@@ -442,9 +456,37 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
           <MaterialIcons name="close" size={35} color="white" />
         </TouchableOpacity>
 
+        {/* SUPER LIKE BUTTON (GOLD STAR) */}
+        <TouchableOpacity
+          onPress={() => {
+            console.log("⭐ SUPER LIKE button pressed");
+            handleSuperLike();
+          }}
+          style={{
+            width: 50,
+            height: 50,
+            borderRadius: 25,
+            backgroundColor: "#FFD700",
+            justifyContent: "center",
+            alignItems: "center",
+            marginRight: 50,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 8,
+          }}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="star" size={24} color="white" />
+        </TouchableOpacity>
+
         {/* GREEN HEART BUTTON */}
         <TouchableOpacity
-          onPress={() => handleSwipe("LIKE")}
+          onPress={() => {
+            console.log("💚 LIKE button pressed");
+            handleSwipe("LIKE");
+          }}
           style={{
             width: 70,
             height: 70,
@@ -463,6 +505,25 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
           <MaterialIcons name="favorite" size={35} color="white" />
         </TouchableOpacity>
       </View>
+
+      {/* Match Celebration Modal */}
+      <MatchCelebrationModal
+        visible={showMatchModal}
+        match={matchData}
+        currentUserId={currentUser.id || 0}
+        onClose={() => {
+          setShowMatchModal(false);
+          setMatchData(null);
+        }}
+      />
+
+      {/* Paywall Modal */}
+      <PaywallModal
+        visible={showPaywallModal}
+        feature={paywallFeature}
+        onClose={() => setShowPaywallModal(false)}
+        onUpgrade={() => setShowPaywallModal(false)}
+      />
     </View>
   );
 };
