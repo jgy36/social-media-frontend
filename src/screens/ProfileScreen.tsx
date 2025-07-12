@@ -1,4 +1,4 @@
-// src/screens/ProfileScreen.tsx - Enhanced with swipeable tabs and tier badges
+// src/screens/ProfileScreen.tsx - Add these imports at the top
 import { MaterialIcons } from "@expo/vector-icons";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
@@ -12,8 +12,8 @@ import {
   Animated,
   Dimensions,
 } from "react-native";
-import { useSelector } from "react-redux";
-import { RootState } from "../redux/store";
+import { useSelector, useDispatch } from "react-redux"; // ADD useDispatch here
+import { RootState, AppDispatch } from "../redux/store"; // ADD AppDispatch here
 import {
   useNavigation,
   useFocusEffect,
@@ -23,6 +23,8 @@ import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getCurrentDatingProfile, isDatingProfileComplete } from "@/api/dating";
 import { LinearGradient } from "expo-linear-gradient";
+// ADD THIS IMPORT for the subscription action
+import { fetchCurrentSubscription } from "../redux/slices/subscriptionSlice";
 
 import UserBadges from "../components/profile/UserBadges";
 import UserStats from "../components/profile/UserStats";
@@ -110,6 +112,7 @@ const ErrorBoundary = ({
 
 const ProfileScreen = () => {
   const navigation = useNavigation<ProfileScreenNavigationProp>();
+  const dispatch = useDispatch<AppDispatch>(); // ADD THIS LINE
   const user = useSelector((state: RootState) => state.user);
   const { current: subscription } = useSelector(
     (state: RootState) => state.subscription
