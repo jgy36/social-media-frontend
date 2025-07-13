@@ -598,3 +598,39 @@ export const likeUserBack = async (
     return response.data;
   }, "Failed to like user back");
 };
+
+export interface BoostStatus {
+  isBoosted: boolean;
+  canBoost: boolean;
+  boostEndsAt?: string;
+  minutesLeft?: number;
+}
+
+export interface BoostResponse {
+  success: boolean;
+  message?: string;
+  boostEndsAt?: string;
+  boostDurationMinutes?: number;
+  error?: string;
+  upgradeRequired?: boolean;
+}
+
+/**
+ * Boost user's profile for 30 minutes
+ */
+export const boostProfile = async (): Promise<BoostResponse> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.post<BoostResponse>("/dating/boost");
+    return response.data;
+  }, "Failed to boost profile");
+};
+
+/**
+ * Get current boost status
+ */
+export const getBoostStatus = async (): Promise<BoostStatus> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.get<BoostStatus>("/dating/boost/status");
+    return response.data;
+  }, "Failed to get boost status");
+};

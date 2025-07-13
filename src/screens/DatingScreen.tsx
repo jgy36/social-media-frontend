@@ -39,6 +39,7 @@ const DatingScreen = () => {
   const [likes, setLikes] = useState<any[]>([]); // ADD THIS STATE
   const [likeCount, setLikeCount] = useState(0); // ADD THIS STATE
   const [loading, setLoading] = useState(true);
+  const [showBoostModal, setShowBoostModal] = useState(false);
 
   const translateX = useRef(new Animated.Value(0)).current;
   const activeTabRef = useRef(activeTab);
@@ -243,6 +244,20 @@ const DatingScreen = () => {
           >
             <MaterialIcons name="settings" size={24} color="#9CA3AF" />
           </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setShowBoostModal(true)}
+            className="p-2 mr-2"
+          >
+            <MaterialIcons name="trending-up" size={24} color="#8B5CF6" />
+          </TouchableOpacity>
+          <BoostModal
+            visible={showBoostModal}
+            onClose={() => setShowBoostModal(false)}
+            onBoostSuccess={() => {
+              console.log("Profile boosted successfully!");
+              // Optionally refresh data
+            }}
+          />
         </View>
 
         {/* Tab Selector - NOW WITH 3 TABS */}

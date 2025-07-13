@@ -17,6 +17,7 @@ import { getPotentialMatches, swipeUser } from "@/api/dating"; // Use your exist
 import { DatingProfile } from "@/types/dating";
 import MatchCelebrationModal from "@/components/dating/MatchCelebrationModal";
 import PaywallModal from "@/components/subscription/PaywallModal";
+import { apiClient } from "@/api/apiClient";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 const CARD_WIDTH = screenWidth - 32;
@@ -41,9 +42,93 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
   const [matchData, setMatchData] = useState<any>(null);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [paywallFeature, setPaywallFeature] = useState<string | null>(null);
+  const [lastSwipedProfile, setLastSwipedProfile] =
+    useState<DatingProfile | null>(null);
+  const [canUndo, setCanUndo] = useState(false);
+  const [undoTimeLeft, setUndoTimeLeft] = useState(0);
 
   // Animation values
   const cardOpacity = useRef(new Animated.Value(1)).current;
+
+  // Add this useEffect to manage undo timer
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (canUndo && undoTimeLeft > 0) {
+      interval = setInterval(() => {
+        setUndoTimeLeft((prev) => {
+          if (prev <= 1) {
+            setCanUndo(false);
+            setLastSwipedProfile(null);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [canUndo, undoTimeLeft]);
+
+  // Check if user can undo swipes based on subscription
+  const canUserUndo = () => {
+    if (!subscription) return false;
+    return subscription.tier !== "FREE"; // Essential+ can undo
+  };
+
+  // Add the undo function
+  const handleUndoSwipe = async () => {
+    if (!canUndo || !lastSwipedProfile) {
+      console.log("❌ Cannot undo - no recent swipe or not available");
+      return;
+    }
+
+    if (!canUserUndo()) {
+      console.log("🚫 Undo not allowed - showing paywall");
+      setPaywallFeature("undo_swipe");
+      setShowPaywallModal(true);
+      return;
+    }
+
+    try {
+      console.log("↩️ Undoing last swipe...");
+
+      const response = await apiClient.post("/dating/undo-swipe");
+      console.log("✅ Undo response:", response.data);
+
+      if (response.data.success) {
+        // Add the profile back to the potential matches at the current index
+        setProfiles((prev) => {
+          const newProfiles = [...prev];
+          newProfiles.splice(currentIndex, 0, response.data.undoneProfile);
+          return newProfiles;
+        });
+
+        // Reset undo state
+        setCanUndo(false);
+        setLastSwipedProfile(null);
+        setUndoTimeLeft(0);
+
+        Alert.alert(
+          "Swipe Undone! ↩️",
+          "We brought them back to your stack. You can swipe again!",
+          [{ text: "Great!" }]
+        );
+      }
+    } catch (error: any) {
+      console.error("❌ Failed to undo swipe:", error);
+
+      if (error.response?.status === 402 || error.response?.status === 403) {
+        // Subscription required
+        setPaywallFeature("undo_swipe");
+        setShowPaywallModal(true);
+      } else {
+        Alert.alert("Error", "Failed to undo swipe. Please try again.");
+      }
+    }
+  };
 
   useEffect(() => {
     loadPotentialMatches();
@@ -97,6 +182,7 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
     return canUse;
   };
 
+  // Update the handleSwipe function to enable undo
   const handleSwipe = async (direction: "LIKE" | "PASS") => {
     if (currentIndex >= profiles.length) {
       console.log("❌ No more profiles to swipe");
@@ -107,6 +193,13 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
     console.log(
       `🎯 ${direction} on ${currentProfile.user?.username || "unknown user"}`
     );
+
+    // Store for undo functionality (before the swipe)
+    if (canUserUndo()) {
+      setLastSwipedProfile(currentProfile);
+      setCanUndo(true);
+      setUndoTimeLeft(1800); // 30 minutes = 1800 seconds
+    }
 
     // Animate card out
     Animated.timing(cardOpacity, {
@@ -132,10 +225,18 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
         setMatchData(response.match);
         setShowMatchModal(true);
         onMatch(response.match);
+
+        // Disable undo for matches
+        setCanUndo(false);
+        setLastSwipedProfile(null);
       }
     } catch (error) {
       console.error("❌ Failed to swipe:", error);
       Alert.alert("Error", "Failed to record swipe. Please try again.");
+
+      // If swipe failed, disable undo
+      setCanUndo(false);
+      setLastSwipedProfile(null);
     }
   };
 
@@ -393,117 +494,140 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
           )}
       </View>
 
-      {/* SIMPLIFIED BUTTONS that actually work */}
+      {/* UPDATED BUTTONS with Undo */}
       <View
         style={{
           position: "absolute",
           bottom: 15,
           left: 0,
           right: 0,
-          flexDirection: "row",
-          justifyContent: "center",
-          alignItems: "center",
           paddingHorizontal: 32,
           zIndex: 2000,
         }}
       >
-        <TouchableOpacity
-          onPress={() => {
-            console.log("🧪 Testing paywall modal");
-            setPaywallFeature("super_like");
-            setShowPaywallModal(true);
-          }}
-          style={{
-            position: "absolute",
-            top: -80, // Position above the other buttons
-            left: "50%",
-            marginLeft: -40,
-            width: 80,
-            height: 30,
-            backgroundColor: "#FF6B9D",
-            borderRadius: 15,
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={{ color: "white", fontSize: 12, fontWeight: "bold" }}>
-            Test Paywall
-          </Text>
-        </TouchableOpacity>
-        {/* RED X BUTTON */}
-        <TouchableOpacity
-          onPress={() => {
-            console.log("❌ PASS button pressed");
-            handleSwipe("PASS");
-          }}
-          style={{
-            width: 70,
-            height: 70,
-            borderRadius: 35,
-            backgroundColor: "#fd5068",
-            justifyContent: "center",
-            alignItems: "center",
-            marginRight: 50,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 8,
-          }}
-          activeOpacity={0.8}
-        >
-          <MaterialIcons name="close" size={35} color="white" />
-        </TouchableOpacity>
+        {/* Undo Button - Positioned above main buttons */}
+        {canUndo && lastSwipedProfile && (
+          <View
+            style={{
+              alignItems: "center",
+              marginBottom: 20,
+              backgroundColor: "rgba(0,0,0,0.8)",
+              borderRadius: 25,
+              padding: 12,
+              alignSelf: "center",
+              flexDirection: "row",
+            }}
+          >
+            <TouchableOpacity
+              onPress={handleUndoSwipe}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: "#FFD700",
+                borderRadius: 20,
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                marginRight: 12,
+              }}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="undo" size={20} color="white" />
+              <Text
+                style={{ color: "white", fontWeight: "bold", marginLeft: 4 }}
+              >
+                Undo
+              </Text>
+            </TouchableOpacity>
 
-        {/* SUPER LIKE BUTTON (GOLD STAR) */}
-        <TouchableOpacity
-          onPress={() => {
-            console.log("⭐ SUPER LIKE button pressed");
-            handleSuperLike();
-          }}
-          style={{
-            width: 50,
-            height: 50,
-            borderRadius: 25,
-            backgroundColor: "#FFD700",
-            justifyContent: "center",
-            alignItems: "center",
-            marginRight: 50,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 8,
-          }}
-          activeOpacity={0.8}
-        >
-          <MaterialIcons name="star" size={24} color="white" />
-        </TouchableOpacity>
+            <Text style={{ color: "white", fontSize: 12 }}>
+              {Math.floor(undoTimeLeft / 60)}:
+              {(undoTimeLeft % 60).toString().padStart(2, "0")} left
+            </Text>
+          </View>
+        )}
 
-        {/* GREEN HEART BUTTON */}
-        <TouchableOpacity
-          onPress={() => {
-            console.log("💚 LIKE button pressed");
-            handleSwipe("LIKE");
-          }}
+        {/* Main Action Buttons */}
+        <View
           style={{
-            width: 70,
-            height: 70,
-            borderRadius: 35,
-            backgroundColor: "#4ade80",
+            flexDirection: "row",
             justifyContent: "center",
             alignItems: "center",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 8,
           }}
-          activeOpacity={0.8}
         >
-          <MaterialIcons name="favorite" size={35} color="white" />
-        </TouchableOpacity>
+          {/* RED X BUTTON */}
+          <TouchableOpacity
+            onPress={() => {
+              console.log("❌ PASS button pressed");
+              handleSwipe("PASS");
+            }}
+            style={{
+              width: 70,
+              height: 70,
+              borderRadius: 35,
+              backgroundColor: "#fd5068",
+              justifyContent: "center",
+              alignItems: "center",
+              marginRight: 50,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="close" size={35} color="white" />
+          </TouchableOpacity>
+
+          {/* SUPER LIKE BUTTON (GOLD STAR) */}
+          <TouchableOpacity
+            onPress={() => {
+              console.log("⭐ SUPER LIKE button pressed");
+              handleSuperLike();
+            }}
+            style={{
+              width: 50,
+              height: 50,
+              borderRadius: 25,
+              backgroundColor: "#FFD700",
+              justifyContent: "center",
+              alignItems: "center",
+              marginRight: 50,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="star" size={24} color="white" />
+          </TouchableOpacity>
+
+          {/* GREEN HEART BUTTON */}
+          <TouchableOpacity
+            onPress={() => {
+              console.log("💚 LIKE button pressed");
+              handleSwipe("LIKE");
+            }}
+            style={{
+              width: 70,
+              height: 70,
+              borderRadius: 35,
+              backgroundColor: "#4ade80",
+              justifyContent: "center",
+              alignItems: "center",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="favorite" size={35} color="white" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Match Celebration Modal */}
