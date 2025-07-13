@@ -376,12 +376,38 @@ export const updatePhotoOrder = async (photoUrls: string[]): Promise<void> => {
 /**
  * Get potential matches for swiping
  */
+// Update src/api/dating.ts
 export const getPotentialMatches = async (): Promise<PotentialMatch[]> => {
   return safeApiCall(async () => {
-    const response = await apiClient.get<PotentialMatch[]>(
-      "/dating/potential-matches"
+    const response = await apiClient.get<any[]>(
+      "/dating/potential-matches?useAlgorithm=false"
     );
-    return response.data;
+
+    // Transform backend DatingProfile[] to PotentialMatch[]
+    const transformedProfiles: PotentialMatch[] = response.data.map(
+      (profile: any) => ({
+        ...profile,
+        user: {
+          id: profile.user?.id || profile.id,
+          username: profile.user?.username || `user_${profile.id}`,
+          displayName:
+            profile.user?.displayName ||
+            profile.user?.username ||
+            `User ${profile.id}`,
+          email: profile.user?.email || "",
+          profileImageUrl: profile.user?.profileImageUrl,
+          age: profile.age || profile.user?.age,
+          ageConfirmed: profile.user?.ageConfirmed || true,
+          eligibleForDating: profile.user?.eligibleForDating || true,
+          lastActive: profile.user?.lastActive,
+        },
+        distance: undefined,
+        compatibility: undefined,
+      })
+    );
+
+    console.log("✅ Transformed profiles:", transformedProfiles);
+    return transformedProfiles;
   }, "Failed to get potential matches");
 };
 
@@ -545,4 +571,30 @@ export const checkMatchStatus = async (userId: number): Promise<boolean> => {
       return false; // If can't check, assume not matched
     }
   }, "Failed to check match status");
+};
+
+export const getWhoLikedMe = async (): Promise<DatingProfile[]> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.get<{
+      likes: DatingProfile[];
+      count: number;
+      tier: string;
+    }>("/dating/who-liked-me");
+    return response.data.likes;
+  }, "Failed to get who liked you");
+};
+
+// Add this to src/api/dating.ts
+/**
+ * Like back a user who has already liked you
+ */
+export const likeUserBack = async (
+  targetUserId: number
+): Promise<SwipeResponse> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.post<SwipeResponse>(
+      `/dating/like-back?targetUserId=${targetUserId}`
+    );
+    return response.data;
+  }, "Failed to like user back");
 };

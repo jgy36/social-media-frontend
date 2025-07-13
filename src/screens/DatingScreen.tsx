@@ -1,4 +1,4 @@
-// src/screens/DatingScreen.tsx - Enhanced with swipeable tabs
+// src/screens/DatingScreen.tsx - Updated with "Who Liked Me" tab
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -19,9 +19,11 @@ import {
   isDatingProfileComplete,
   getCurrentDatingProfile,
   getUserMatches,
+  getWhoLikedMe, // ADD THIS IMPORT
 } from "@/api/dating";
 import SwipeCards from "@/components/dating/SwipeCards";
 import MatchesList from "@/components/dating/MatchesList";
+import LikesList from "@/components/dating/LikesList"; // WE'LL CREATE THIS
 
 const { width } = Dimensions.get("window");
 
@@ -30,10 +32,12 @@ const DatingScreen = () => {
   const user = useSelector((state: RootState) => state.user);
 
   const [hasCompletedProfile, setHasCompletedProfile] = useState(false);
-  const [activeTab, setActiveTab] = useState<"discover" | "matches">(
+  const [activeTab, setActiveTab] = useState<"discover" | "matches" | "likes">(
     "discover"
-  );
+  ); // ADD "likes"
   const [matches, setMatches] = useState<any[]>([]);
+  const [likes, setLikes] = useState<any[]>([]); // ADD THIS STATE
+  const [likeCount, setLikeCount] = useState(0); // ADD THIS STATE
   const [loading, setLoading] = useState(true);
 
   const translateX = useRef(new Animated.Value(0)).current;
@@ -47,6 +51,7 @@ const DatingScreen = () => {
   useEffect(() => {
     checkDatingProfile();
     loadMatches();
+    loadLikes(); // ADD THIS
   }, []);
 
   const checkDatingProfile = async () => {
@@ -55,7 +60,6 @@ const DatingScreen = () => {
       setHasCompletedProfile(isComplete);
 
       if (!isComplete) {
-        // Show alert and redirect to profile setup
         Alert.alert(
           "Complete Your Dating Profile",
           "You need to complete your dating profile before you can start swiping!",
@@ -87,11 +91,23 @@ const DatingScreen = () => {
     }
   };
 
+  // ADD THIS NEW FUNCTION
+  const loadLikes = async () => {
+    try {
+      const userLikes = await getWhoLikedMe();
+      setLikes(userLikes);
+      setLikeCount(userLikes.length);
+    } catch (error) {
+      console.error("Failed to load likes:", error);
+      // If user doesn't have permission, set count to 0
+      setLikes([]);
+      setLikeCount(0);
+    }
+  };
+
   const handleNewMatch = (matchData: any) => {
-    // Add new match to the list
     setMatches((prev) => [matchData, ...prev]);
 
-    // Show match notification
     Alert.alert(
       "It's a Match! 💕",
       `You and ${
@@ -113,12 +129,12 @@ const DatingScreen = () => {
     );
   };
 
-  // Pan responder for swipe gestures
+  // Update pan responder to handle 3 tabs
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (evt, gestureState) => {
-        if (!hasCompletedProfile) return false; // Disable swipe if no profile
+        if (!hasCompletedProfile) return false;
         const isHorizontalSwipe =
           Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
         const isSignificantSwipe = Math.abs(gestureState.dx) > 30;
@@ -141,14 +157,18 @@ const DatingScreen = () => {
         }).start();
 
         if (gestureState.dx > swipeThreshold) {
-          // Swipe right - go to discover
+          // Swipe right - go to previous tab
           if (currentTab === "matches") {
             setActiveTab("discover");
+          } else if (currentTab === "likes") {
+            setActiveTab("matches");
           }
         } else if (gestureState.dx < -swipeThreshold) {
-          // Swipe left - go to matches
+          // Swipe left - go to next tab
           if (currentTab === "discover") {
             setActiveTab("matches");
+          } else if (currentTab === "matches") {
+            setActiveTab("likes");
           }
         }
       },
@@ -217,7 +237,6 @@ const DatingScreen = () => {
         <View className="flex-row items-center justify-between">
           <Text className="text-xl font-bold text-white">Dating</Text>
 
-          {/* Only the settings icon - filter icon removed */}
           <TouchableOpacity
             onPress={() => navigation.navigate("DatingSettings")}
             className="p-2"
@@ -226,7 +245,7 @@ const DatingScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Tab Selector */}
+        {/* Tab Selector - NOW WITH 3 TABS */}
         <View className="flex-row mt-4">
           <TouchableOpacity
             onPress={() => setActiveTab("discover")}
@@ -249,7 +268,7 @@ const DatingScreen = () => {
 
           <TouchableOpacity
             onPress={() => setActiveTab("matches")}
-            className="pb-2"
+            className="mr-8 pb-2"
             style={{
               borderBottomWidth: activeTab === "matches" ? 2 : 0,
               borderBottomColor:
@@ -265,6 +284,26 @@ const DatingScreen = () => {
               Matches ({matches.length})
             </Text>
           </TouchableOpacity>
+
+          {/* ADD NEW LIKES TAB */}
+          <TouchableOpacity
+            onPress={() => setActiveTab("likes")}
+            className="pb-2"
+            style={{
+              borderBottomWidth: activeTab === "likes" ? 2 : 0,
+              borderBottomColor:
+                activeTab === "likes" ? "#E91E63" : "transparent",
+            }}
+          >
+            <Text
+              className="text-base font-medium"
+              style={{
+                color: activeTab === "likes" ? "#ffffff" : "#9ca3af",
+              }}
+            >
+              Likes ({likeCount})
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -276,7 +315,7 @@ const DatingScreen = () => {
       >
         {activeTab === "discover" ? (
           <SwipeCards onMatch={handleNewMatch} />
-        ) : (
+        ) : activeTab === "matches" ? (
           <MatchesList
             matches={matches}
             onMatchPress={(match) => {
@@ -285,6 +324,27 @@ const DatingScreen = () => {
               navigation.navigate("UserProfile", {
                 username: otherUser.username,
               });
+            }}
+          />
+        ) : (
+          // ADD LIKES LIST COMPONENT
+          // In DatingScreen.tsx, update the LikesList usage:
+          <LikesList
+            likes={likes}
+            onLikePress={(profile) => {
+              console.log("Liked profile:", profile);
+            }}
+            onRefresh={loadLikes}
+            onNewMatch={(matchData) => {
+              // ADD THIS CALLBACK
+              console.log("🎉 New match from likes:", matchData);
+
+              // Add to matches list
+              setMatches((prev) => [matchData, ...prev]);
+
+              // Refresh both lists
+              loadMatches();
+              loadLikes();
             }}
           />
         )}
