@@ -1,4 +1,4 @@
-// src/api/dating.ts - Complete clean version
+// src/api/dating.ts - Complete updated version with new features
 import { apiClient, safeApiCall } from "./apiClient";
 import * as ImagePicker from "expo-image-picker";
 
@@ -28,9 +28,9 @@ export interface DatingProfile {
   lookingFor: string;
   interests: string[];
   virtues: Array<{ category: string; value: string }>;
-  // NEW: Add gender field
   gender: string;
-  // Note: age and preferences moved to user settings
+  age?: number;
+  user?: any;
 }
 
 export interface CreateDatingProfileRequest {
@@ -58,7 +58,7 @@ export interface CreateDatingProfileRequest {
     value: string;
   }>;
   gender: string;
-  age?: number; // ADD this line
+  age?: number;
 }
 
 export interface DatingPreferences {
@@ -92,6 +92,7 @@ export interface SwipeResponse {
   success: boolean;
   matched: boolean;
   match?: Match;
+  superLike?: boolean;
   error?: string;
 }
 
@@ -113,13 +114,80 @@ export interface Match {
   isActive: boolean;
 }
 
+export interface PotentialMatch extends DatingProfile {
+  user: {
+    id: number;
+    username: string;
+    displayName: string;
+    email: string;
+    profileImageUrl?: string;
+    age?: number;
+    ageConfirmed?: boolean;
+    eligibleForDating?: boolean;
+    lastActive?: string;
+  };
+  distance?: number;
+  compatibility?: number;
+}
+
+// NEW INTERFACES FOR NEW FEATURES
+export interface DatingFilters {
+  location?: string;
+  education?: string;
+  lifestyle?: string;
+  religion?: string;
+  relationshipType?: string;
+  drinking?: string;
+  smoking?: string;
+  hasChildren?: string;
+  wantChildren?: string;
+}
+
+export interface UndoSwipeResponse {
+  success: boolean;
+  message?: string;
+  undoneProfile?: DatingProfile;
+  direction?: string;
+  error?: string;
+}
+
+export interface BoostStatus {
+  isBoosted: boolean;
+  canBoost: boolean;
+  boostEndsAt?: string;
+  minutesLeft?: number;
+}
+
+export interface BoostResponse {
+  success: boolean;
+  message?: string;
+  boostEndsAt?: string;
+  boostDurationMinutes?: number;
+  error?: string;
+  upgradeRequired?: boolean;
+}
+
+export interface SubscriptionStatus {
+  tier: string;
+  canSwipe: boolean;
+  canSuperLike: boolean;
+  canBoost: boolean;
+  hasPassportMode: boolean;
+  canSeeWhoLikedMe: boolean;
+  canUndoSwipes: boolean;
+  hasAdvancedFilters: boolean;
+  dailySwipesUsed: number;
+  dailySwipeLimit: number;
+  dailySuperLikesUsed: number;
+  dailySuperLikeLimit: number;
+  monthlyBoostsUsed: number;
+  monthlyBoostLimit: number;
+}
+
 // ============================================================================
 // DATING SETTINGS API FUNCTIONS
 // ============================================================================
 
-/**
- * Get dating eligibility status
- */
 export const getDatingEligibility = async (): Promise<DatingEligibility> => {
   return safeApiCall(async () => {
     const response = await apiClient.get<DatingEligibility>(
@@ -129,9 +197,6 @@ export const getDatingEligibility = async (): Promise<DatingEligibility> => {
   }, "Failed to get dating eligibility");
 };
 
-/**
- * Confirm user's age for dating features
- */
 export const confirmAge = async (): Promise<AgeConfirmationResponse> => {
   return safeApiCall(async () => {
     const response = await apiClient.post<AgeConfirmationResponse>(
@@ -141,9 +206,6 @@ export const confirmAge = async (): Promise<AgeConfirmationResponse> => {
   }, "Failed to confirm age");
 };
 
-/**
- * Get current dating preferences
- */
 export const getDatingPreferences = async (): Promise<DatingPreferences> => {
   return safeApiCall(async () => {
     const response = await apiClient.get<DatingPreferences>(
@@ -153,9 +215,6 @@ export const getDatingPreferences = async (): Promise<DatingPreferences> => {
   }, "Failed to get dating preferences");
 };
 
-/**
- * Update dating preferences
- */
 export const updateDatingPreferences = async (
   preferences: DatingPreferences
 ): Promise<PreferencesUpdateResponse> => {
@@ -172,9 +231,6 @@ export const updateDatingPreferences = async (
 // PROFILE MANAGEMENT API FUNCTIONS
 // ============================================================================
 
-/**
- * Upload dating photo
- */
 export const uploadDatingPhoto = async (
   imageAsset: ImagePicker.ImagePickerAsset
 ): Promise<string> => {
@@ -216,14 +272,10 @@ export const uploadDatingPhoto = async (
   }, "Failed to upload dating photo");
 };
 
-/**
- * Create or update dating profile
- */
 export const createOrUpdateDatingProfile = async (
   profileData: CreateDatingProfileRequest
 ): Promise<DatingProfile> => {
   return safeApiCall(async () => {
-    // Convert arrays to JSON strings if they exist (for backend compatibility)
     const backendData = {
       ...profileData,
       prompts:
@@ -243,9 +295,6 @@ export const createOrUpdateDatingProfile = async (
   }, "Failed to create/update dating profile");
 };
 
-/**
- * Get current user's dating profile
- */
 export const getCurrentDatingProfile =
   async (): Promise<DatingProfile | null> => {
     return safeApiCall(async () => {
@@ -317,9 +366,6 @@ export const getCurrentDatingProfile =
     }, "Failed to get dating profile");
   };
 
-/**
- * Check if dating profile is complete
- */
 export const isDatingProfileComplete = async (): Promise<boolean> => {
   try {
     const profile = await getCurrentDatingProfile();
@@ -328,8 +374,8 @@ export const isDatingProfileComplete = async (): Promise<boolean> => {
       photosCount: profile?.photos?.length || 0,
       bioLength: profile?.bio?.trim().length || 0,
       hasGender: !!profile?.gender,
-      profileAge: profile?.age, // Add age to the check
-      userAge: profile?.user?.age, // Check user age too
+      profileAge: profile?.age,
+      userAge: profile?.user?.age,
     });
 
     const isComplete =
@@ -337,7 +383,7 @@ export const isDatingProfileComplete = async (): Promise<boolean> => {
       profile.photos.length > 0 &&
       profile.bio.trim().length > 0 &&
       profile.gender &&
-      (profile.age || profile.user?.age); // ✅ Check either profile age or user age
+      (profile.age || profile.user?.age);
 
     console.log("✅ Profile is complete:", isComplete);
     return isComplete;
@@ -347,9 +393,6 @@ export const isDatingProfileComplete = async (): Promise<boolean> => {
   }
 };
 
-/**
- * Delete a photo from dating profile
- */
 export const deleteDatingPhoto = async (photoUrl: string): Promise<void> => {
   return safeApiCall(async () => {
     await apiClient.delete("/dating/photo", {
@@ -358,9 +401,6 @@ export const deleteDatingPhoto = async (photoUrl: string): Promise<void> => {
   }, "Failed to delete photo");
 };
 
-/**
- * Update photo order in dating profile
- */
 export const updatePhotoOrder = async (photoUrls: string[]): Promise<void> => {
   return safeApiCall(async () => {
     await apiClient.put("/dating/photos/reorder", {
@@ -370,17 +410,27 @@ export const updatePhotoOrder = async (photoUrls: string[]): Promise<void> => {
 };
 
 // ============================================================================
-// MATCHING & SWIPING API FUNCTIONS
+// MATCHING & SWIPING API FUNCTIONS (UPDATED WITH FILTERS)
 // ============================================================================
 
-/**
- * Get potential matches for swiping
- */
-// Update src/api/dating.ts
-export const getPotentialMatches = async (): Promise<PotentialMatch[]> => {
+export const getPotentialMatches = async (
+  filters?: DatingFilters
+): Promise<PotentialMatch[]> => {
   return safeApiCall(async () => {
+    // Build query parameters
+    const params = new URLSearchParams();
+    params.append("useAlgorithm", "false");
+
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value && value.trim() !== "") {
+          params.append(key, value);
+        }
+      });
+    }
+
     const response = await apiClient.get<any[]>(
-      "/dating/potential-matches?useAlgorithm=false"
+      `/dating/potential-matches?${params.toString()}`
     );
 
     // Transform backend DatingProfile[] to PotentialMatch[]
@@ -406,20 +456,16 @@ export const getPotentialMatches = async (): Promise<PotentialMatch[]> => {
       })
     );
 
-    console.log("✅ Transformed profiles:", transformedProfiles);
+    console.log("✅ Transformed profiles with filters:", transformedProfiles);
     return transformedProfiles;
   }, "Failed to get potential matches");
 };
 
-/**
- * Swipe on a user
- */
 export const swipeUser = async (
   targetUserId: number,
-  direction: "LIKE" | "PASS"
+  direction: "LIKE" | "PASS" | "SUPER_LIKE"
 ): Promise<SwipeResponse> => {
   return safeApiCall(async () => {
-    // ✅ FIXED - send as query parameters instead of JSON body
     const response = await apiClient.post<SwipeResponse>(
       `/dating/swipe?targetUserId=${targetUserId}&direction=${direction}`
     );
@@ -427,9 +473,6 @@ export const swipeUser = async (
   }, "Failed to swipe user");
 };
 
-/**
- * Get user's matches
- */
 export const getUserMatches = async (): Promise<Match[]> => {
   return safeApiCall(async () => {
     const response = await apiClient.get<Match[]>("/dating/matches");
@@ -437,9 +480,6 @@ export const getUserMatches = async (): Promise<Match[]> => {
   }, "Failed to get matches");
 };
 
-/**
- * Mark a match as "seen" (no longer new)
- */
 export const markMatchAsSeen = async (
   matchId: number
 ): Promise<{ success: boolean }> => {
@@ -452,12 +492,71 @@ export const markMatchAsSeen = async (
 };
 
 // ============================================================================
+// NEW FEATURES API FUNCTIONS
+// ============================================================================
+
+// UNDO SWIPE
+export const undoLastSwipe = async (): Promise<UndoSwipeResponse> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.post<UndoSwipeResponse>(
+      "/dating/undo-swipe"
+    );
+    return response.data;
+  }, "Failed to undo swipe");
+};
+
+// BOOST FEATURES
+export const boostProfile = async (): Promise<BoostResponse> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.post<BoostResponse>("/dating/boost");
+    return response.data;
+  }, "Failed to boost profile");
+};
+
+export const getBoostStatus = async (): Promise<BoostStatus> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.get<BoostStatus>("/dating/boost/status");
+    return response.data;
+  }, "Failed to get boost status");
+};
+
+// WHO LIKED ME
+export const getWhoLikedMe = async (): Promise<DatingProfile[]> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.get<{
+      likes: DatingProfile[];
+      count: number;
+      tier: string;
+    }>("/dating/who-liked-me");
+    return response.data.likes;
+  }, "Failed to get who liked you");
+};
+
+export const likeUserBack = async (
+  targetUserId: number
+): Promise<SwipeResponse> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.post<SwipeResponse>(
+      `/dating/like-back?targetUserId=${targetUserId}`
+    );
+    return response.data;
+  }, "Failed to like user back");
+};
+
+// SUBSCRIPTION STATUS
+export const getSubscriptionStatus = async (): Promise<SubscriptionStatus> => {
+  return safeApiCall(async () => {
+    const response = await apiClient.get<SubscriptionStatus>(
+      "/dating/subscription-status"
+    );
+    return response.data;
+  }, "Failed to get subscription status");
+};
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
-/**
- * Check if user has completed all necessary steps for dating
- */
 export const isDatingReady = async (): Promise<{
   ready: boolean;
   missing: string[];
@@ -493,9 +592,6 @@ export const isDatingReady = async (): Promise<{
   }
 };
 
-/**
- * Get another user's dating profile (only accessible if matched or if profile is public)
- */
 export const getUserDatingProfile = async (
   userId: number
 ): Promise<DatingProfile | null> => {
@@ -505,7 +601,6 @@ export const getUserDatingProfile = async (
         `/dating/profile/user/${userId}`
       );
 
-      // Parse JSON fields if they exist
       if (response.data && response.data.prompts) {
         response.data.prompts = response.data.prompts.map((promptStr: any) => {
           try {
@@ -547,7 +642,7 @@ export const getUserDatingProfile = async (
       return response.data;
     } catch (error: any) {
       if (error.response?.status === 404) {
-        return null; // No dating profile found
+        return null;
       }
       if (error.response?.status === 403) {
         throw new Error("You can only view dating profiles of matched users");
@@ -557,9 +652,6 @@ export const getUserDatingProfile = async (
   }, "Failed to get user's dating profile");
 };
 
-/**
- * Check if current user is matched with another user
- */
 export const checkMatchStatus = async (userId: number): Promise<boolean> => {
   return safeApiCall(async () => {
     try {
@@ -568,69 +660,7 @@ export const checkMatchStatus = async (userId: number): Promise<boolean> => {
       );
       return response.data.isMatched;
     } catch (error) {
-      return false; // If can't check, assume not matched
+      return false;
     }
   }, "Failed to check match status");
-};
-
-export const getWhoLikedMe = async (): Promise<DatingProfile[]> => {
-  return safeApiCall(async () => {
-    const response = await apiClient.get<{
-      likes: DatingProfile[];
-      count: number;
-      tier: string;
-    }>("/dating/who-liked-me");
-    return response.data.likes;
-  }, "Failed to get who liked you");
-};
-
-// Add this to src/api/dating.ts
-/**
- * Like back a user who has already liked you
- */
-export const likeUserBack = async (
-  targetUserId: number
-): Promise<SwipeResponse> => {
-  return safeApiCall(async () => {
-    const response = await apiClient.post<SwipeResponse>(
-      `/dating/like-back?targetUserId=${targetUserId}`
-    );
-    return response.data;
-  }, "Failed to like user back");
-};
-
-export interface BoostStatus {
-  isBoosted: boolean;
-  canBoost: boolean;
-  boostEndsAt?: string;
-  minutesLeft?: number;
-}
-
-export interface BoostResponse {
-  success: boolean;
-  message?: string;
-  boostEndsAt?: string;
-  boostDurationMinutes?: number;
-  error?: string;
-  upgradeRequired?: boolean;
-}
-
-/**
- * Boost user's profile for 30 minutes
- */
-export const boostProfile = async (): Promise<BoostResponse> => {
-  return safeApiCall(async () => {
-    const response = await apiClient.post<BoostResponse>("/dating/boost");
-    return response.data;
-  }, "Failed to boost profile");
-};
-
-/**
- * Get current boost status
- */
-export const getBoostStatus = async (): Promise<BoostStatus> => {
-  return safeApiCall(async () => {
-    const response = await apiClient.get<BoostStatus>("/dating/boost/status");
-    return response.data;
-  }, "Failed to get boost status");
 };

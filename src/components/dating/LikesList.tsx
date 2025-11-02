@@ -1,25 +1,22 @@
-// src/components/dating/LikesList.tsx - COMPLETE FILE
+// src/components/dating/LikesList.tsx - Component for "Who Liked Me" feature
 import React, { useState } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
   FlatList,
+  TouchableOpacity,
   Image,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
 import { RootState } from "@/redux/store";
-import { useNavigation } from "@react-navigation/native";
-import type { RootStackNavigationProp } from "@/navigation/types";
-import { swipeUser, likeUserBack } from "@/api/dating";
-import ProfileViewModal from "./ProfileViewModal";
-import MatchCelebrationModal from "./MatchCelebrationModal";
+import { DatingProfile, likeUserBack } from "@/api/dating";
 
 interface LikesListProps {
-  likes: any[];
-  onLikePress: (profile: any) => void;
+  likes: DatingProfile[];
+  onLikePress: (profile: DatingProfile) => void;
   onRefresh: () => void;
   onNewMatch?: (matchData: any) => void;
 }
@@ -30,269 +27,333 @@ const LikesList: React.FC<LikesListProps> = ({
   onRefresh,
   onNewMatch,
 }) => {
-  const navigation = useNavigation<RootStackNavigationProp>();
   const { current: subscription } = useSelector(
     (state: RootState) => state.subscription
   );
-  const user = useSelector((state: RootState) => state.user);
+  const [refreshing, setRefreshing] = useState(false);
+  const [likingBack, setLikingBack] = useState<number | null>(null);
 
-  const [selectedProfile, setSelectedProfile] = useState<any>(null);
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showMatchModal, setShowMatchModal] = useState(false);
-  const [matchData, setMatchData] = useState<any>(null);
+  const hasAccess = () => {
+    return subscription?.tier !== "FREE";
+  };
 
-  const isFreeTier = !subscription || subscription.tier === "FREE";
-  const isEssentialTier = subscription?.tier === "ESSENTIAL";
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await onRefresh();
+    setRefreshing(false);
+  };
 
-  const handleLikeBack = async (profile: any) => {
+  const handleLikeBack = async (profile: DatingProfile) => {
+    if (!hasAccess()) {
+      Alert.alert(
+        "Upgrade Required",
+        "Upgrade to see who liked you and like them back!",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
     try {
-      console.log("🔄 Liking back user:", profile.user?.id);
+      setLikingBack(profile.id);
+      console.log("💕 Liking back user:", profile.user?.username);
 
-      const response = await likeUserBack(profile.user?.id);
+      const response = await likeUserBack(profile.user?.id || profile.id);
 
-      if (response.matched) {
-        console.log("🎉 IT'S A MATCH!", response.match);
+      if (response.matched && response.match) {
+        console.log("🎉 It's a match from like back!", response.match);
 
-        setMatchData(response.match);
-        setShowMatchModal(true);
+        Alert.alert(
+          "It's a Match! 💕",
+          `You and ${
+            profile.user?.displayName || profile.user?.username
+          } liked each other!`,
+          [{ text: "Awesome!" }]
+        );
 
+        // Notify parent component about the new match
         onNewMatch?.(response.match);
-        onRefresh();
+      } else {
+        // Liked back successfully but no match yet
+        Alert.alert(
+          "Like Sent! 💚",
+          `You liked ${
+            profile.user?.displayName || profile.user?.username
+          } back!`,
+          [{ text: "Great!" }]
+        );
       }
-    } catch (error) {
+
+      // Refresh the list to remove this profile
+      setTimeout(() => {
+        onRefresh();
+      }, 1000);
+    } catch (error: any) {
       console.error("❌ Failed to like back:", error);
-      Alert.alert("Error", "Failed to send like. Please try again.");
+      Alert.alert("Error", "Failed to like back. Please try again.");
+    } finally {
+      setLikingBack(null);
     }
   };
 
-  const handleViewProfile = (profile: any) => {
-    setSelectedProfile(profile);
-    setShowProfileModal(true);
-  };
-
-  const handleProfileAction = (
-    action: "like" | "pass",
-    matched?: boolean,
-    matchData?: any
-  ) => {
-    setShowProfileModal(false);
-    setSelectedProfile(null);
-
-    if (matched && matchData) {
-      setMatchData(matchData);
-      setShowMatchModal(true);
-      onNewMatch?.(matchData);
-    }
-
-    onRefresh();
-  };
-
-  const renderLike = ({
-    item: profile,
-    index,
-  }: {
-    item: any;
-    index: number;
-  }) => {
-    const shouldBlur = isFreeTier || (isEssentialTier && index >= 5);
+  const renderLikeItem = ({ item: profile }: { item: DatingProfile }) => {
+    const isLikingBack = likingBack === profile.id;
 
     return (
-      <TouchableOpacity
-        className="flex-row items-center p-4 border-b border-gray-800"
-        onPress={() => {
-          if (shouldBlur) {
-            navigation.navigate("SubscriptionPlans");
-          } else {
-            handleViewProfile(profile);
-          }
+      <View
+        style={{
+          backgroundColor: "white",
+          marginHorizontal: 16,
+          marginVertical: 8,
+          borderRadius: 16,
+          padding: 16,
+          flexDirection: "row",
+          alignItems: "center",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 4,
         }}
       >
-        {/* Profile Image */}
-        <View className="relative mr-4">
+        {/* Profile Photo */}
+        <TouchableOpacity
+          onPress={() => onLikePress(profile)}
+          style={{
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            overflow: "hidden",
+            marginRight: 16,
+          }}
+        >
           <Image
             source={{
               uri:
-                profile.photos?.[0] ||
+                (profile.photos && profile.photos[0]) ||
                 `https://api.dicebear.com/7.x/avataaars/svg?seed=${
                   profile.user?.username || "default"
                 }`,
             }}
-            className="w-16 h-16 rounded-full"
-            style={{
-              opacity: shouldBlur ? 0.3 : 1,
-            }}
+            style={{ width: "100%", height: "100%" }}
+            resizeMode="cover"
           />
 
-          {shouldBlur && (
-            <View className="absolute inset-0 items-center justify-center">
-              <MaterialIcons name="lock" size={20} color="#E91E63" />
+          {/* Blur overlay for free users */}
+          {!hasAccess() && (
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(0,0,0,0.6)",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <MaterialIcons name="lock" size={24} color="white" />
             </View>
           )}
-
-          {/* Like indicator */}
-          <View className="absolute -bottom-2 -right-2 w-8 h-8 bg-green-500 rounded-full items-center justify-center border-2 border-black">
-            <MaterialIcons name="favorite" size={16} color="white" />
-          </View>
-        </View>
+        </TouchableOpacity>
 
         {/* Profile Info */}
-        <View className="flex-1">
+        <View style={{ flex: 1 }}>
           <Text
-            className="text-white font-semibold text-lg"
-            style={{ opacity: shouldBlur ? 0.5 : 1 }}
+            style={{
+              fontSize: 18,
+              fontWeight: "bold",
+              color: "#111827",
+              marginBottom: 4,
+            }}
           >
-            {shouldBlur
-              ? "Someone"
-              : profile.user?.displayName ||
-                profile.user?.username ||
-                "Unknown"}
+            {hasAccess()
+              ? `${
+                  profile.user?.displayName ||
+                  profile.user?.username ||
+                  "Unknown"
+                }, ${profile.age || profile.user?.age || "?"}`
+              : "Someone liked you!"}
           </Text>
-          <Text
-            className="text-gray-400 text-sm mt-1"
-            style={{ opacity: shouldBlur ? 0.5 : 1 }}
-          >
-            {shouldBlur
-              ? "Liked your profile"
-              : `${profile.age || "??"} • ${
-                  profile.location || "Unknown location"
-                }`}
-          </Text>
-        </View>
 
-        {/* Action Buttons */}
-        <View className="flex-row">
-          {shouldBlur ? (
-            <TouchableOpacity
-              className="bg-pink-500 rounded-full px-4 py-2"
-              onPress={() => navigation.navigate("SubscriptionPlans")}
+          {hasAccess() && profile.bio && (
+            <Text
+              style={{
+                color: "#6B7280",
+                fontSize: 14,
+                marginBottom: 8,
+              }}
+              numberOfLines={2}
             >
-              <Text className="text-white font-semibold text-sm">Upgrade</Text>
-            </TouchableOpacity>
-          ) : (
-            <View className="flex-row">
-              {/* Pass Button */}
-              <TouchableOpacity
-                className="w-10 h-10 bg-gray-600 rounded-full items-center justify-center mr-3"
-                onPress={(e) => {
-                  e.stopPropagation();
-                  Alert.alert("Pass", "Profile removed from likes");
-                }}
-              >
-                <MaterialIcons name="close" size={16} color="white" />
-              </TouchableOpacity>
+              {profile.bio}
+            </Text>
+          )}
 
-              {/* Like Back Button */}
-              <TouchableOpacity
-                className="w-10 h-10 bg-green-500 rounded-full items-center justify-center"
-                onPress={(e) => {
-                  e.stopPropagation();
-                  handleLikeBack(profile);
-                }}
-              >
-                <MaterialIcons name="favorite" size={16} color="white" />
-              </TouchableOpacity>
+          {hasAccess() && profile.location && (
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <MaterialIcons name="location-on" size={16} color="#9CA3AF" />
+              <Text style={{ color: "#9CA3AF", fontSize: 12, marginLeft: 4 }}>
+                {profile.location}
+              </Text>
             </View>
           )}
+
+          {!hasAccess() && (
+            <Text style={{ color: "#9CA3AF", fontSize: 14 }}>
+              Upgrade to see who liked you
+            </Text>
+          )}
         </View>
-      </TouchableOpacity>
-    );
-  };
 
-  const renderHeader = () => (
-    <View className="p-4 border-b border-gray-800">
-      <View className="flex-row items-center justify-between">
-        <Text className="text-gray-400 text-sm">
-          {likes.length} like{likes.length !== 1 ? "s" : ""}
-        </Text>
-
-        {isFreeTier && (
+        {/* Action Button */}
+        {hasAccess() ? (
           <TouchableOpacity
-            onPress={() => navigation.navigate("SubscriptionPlans")}
-            className="bg-pink-500 rounded-full px-3 py-1"
+            onPress={() => handleLikeBack(profile)}
+            disabled={isLikingBack}
+            style={{
+              backgroundColor: isLikingBack ? "#D1D5DB" : "#10B981",
+              borderRadius: 25,
+              paddingHorizontal: 20,
+              paddingVertical: 10,
+              minWidth: 80,
+              alignItems: "center",
+            }}
+            activeOpacity={0.8}
           >
-            <Text className="text-white text-xs font-semibold">See All</Text>
+            {isLikingBack ? (
+              <MaterialIcons name="hourglass-empty" size={20} color="white" />
+            ) : (
+              <MaterialIcons name="favorite" size={20} color="white" />
+            )}
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={{
+              backgroundColor: "#8B5CF6",
+              borderRadius: 20,
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={{ color: "white", fontSize: 12, fontWeight: "bold" }}>
+              Upgrade
+            </Text>
           </TouchableOpacity>
         )}
       </View>
+    );
+  };
 
-      {isFreeTier && (
-        <View className="mt-3 p-3 bg-pink-600/20 border border-pink-600/50 rounded-xl">
-          <Text className="text-pink-300 font-medium text-sm">
-            💎 Upgrade to see who likes you
-          </Text>
-          <Text className="text-pink-200 text-xs mt-1">
-            Get unlimited access to all your likes with Essential or higher
-          </Text>
-        </View>
-      )}
-
-      {isEssentialTier && likes.length > 5 && (
-        <View className="mt-3 p-3 bg-blue-600/20 border border-blue-600/50 rounded-xl">
-          <Text className="text-blue-300 font-medium text-sm">
-            🥈 Showing your 5 most recent likes
-          </Text>
-          <Text className="text-blue-200 text-xs mt-1">
-            Upgrade to Premium to see all {likes.length} likes
-          </Text>
-        </View>
-      )}
-    </View>
-  );
-
-  const renderEmpty = () => (
-    <View className="flex-1 items-center justify-center py-16">
-      <MaterialIcons name="favorite-border" size={80} color="#6B7280" />
-      <Text className="text-white text-xl font-semibold mt-6 mb-2">
+  const renderEmptyState = () => (
+    <View
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        paddingHorizontal: 32,
+      }}
+    >
+      <MaterialIcons name="favorite-border" size={80} color="#9CA3AF" />
+      <Text
+        style={{
+          color: "white",
+          fontSize: 24,
+          fontWeight: "bold",
+          textAlign: "center",
+          marginTop: 16,
+          marginBottom: 8,
+        }}
+      >
         No Likes Yet
       </Text>
-      <Text className="text-gray-400 text-base text-center px-8 leading-6">
-        Keep swiping and updating your profile! Likes will appear here when
-        people like you.
-      </Text>
-
-      <TouchableOpacity
-        onPress={onRefresh}
-        className="bg-pink-500 rounded-full px-6 py-3 mt-6"
+      <Text
+        style={{
+          color: "#9CA3AF",
+          fontSize: 16,
+          textAlign: "center",
+          lineHeight: 24,
+        }}
       >
-        <Text className="text-white font-semibold">Refresh</Text>
-      </TouchableOpacity>
+        {hasAccess()
+          ? "When someone likes you, they'll appear here. Keep swiping to get noticed!"
+          : "Upgrade to see who likes you and get more matches!"}
+      </Text>
     </View>
   );
 
-  if (likes.length === 0) {
-    return renderEmpty();
-  }
+  const renderHeader = () => (
+    <View style={{ padding: 16 }}>
+      {!hasAccess() && (
+        <View
+          style={{
+            backgroundColor: "#8B5CF6",
+            borderRadius: 12,
+            padding: 16,
+            marginBottom: 16,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginBottom: 8,
+            }}
+          >
+            <MaterialIcons name="visibility" size={24} color="white" />
+            <Text
+              style={{
+                color: "white",
+                fontSize: 18,
+                fontWeight: "bold",
+                marginLeft: 8,
+              }}
+            >
+              See Who Likes You
+            </Text>
+          </View>
+          <Text style={{ color: "white", fontSize: 14, lineHeight: 20 }}>
+            Upgrade to see everyone who's already liked you and get instant
+            matches!
+          </Text>
+        </View>
+      )}
+
+      {hasAccess() && likes.length > 0 && (
+        <Text
+          style={{
+            color: "white",
+            fontSize: 18,
+            fontWeight: "bold",
+            marginBottom: 8,
+          }}
+        >
+          {likes.length} {likes.length === 1 ? "person likes" : "people like"}{" "}
+          you
+        </Text>
+      )}
+    </View>
+  );
 
   return (
-    <View className="flex-1">
+    <View style={{ flex: 1, backgroundColor: "#000000" }}>
       <FlatList
         data={likes}
-        renderItem={renderLike}
-        keyExtractor={(item, index) => `${item.id || index}`}
+        renderItem={renderLikeItem}
+        keyExtractor={(item) => `like-${item.id}`}
         ListHeaderComponent={renderHeader}
+        ListEmptyComponent={renderEmptyState}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#E91E63"
+          />
+        }
         showsVerticalScrollIndicator={false}
-        refreshing={false}
-        onRefresh={onRefresh}
-        ItemSeparatorComponent={() => <View className="h-px bg-gray-800" />}
-      />
-
-      <ProfileViewModal
-        visible={showProfileModal}
-        profile={selectedProfile}
-        onClose={() => {
-          setShowProfileModal(false);
-          setSelectedProfile(null);
-        }}
-        onAction={handleProfileAction}
-      />
-
-      <MatchCelebrationModal
-        visible={showMatchModal}
-        match={matchData}
-        currentUserId={user.id || 0}
-        onClose={() => {
-          setShowMatchModal(false);
-          setMatchData(null);
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingBottom: 32,
         }}
       />
     </View>

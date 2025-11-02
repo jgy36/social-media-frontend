@@ -1,4 +1,4 @@
-// src/components/dating/SwipeCards.tsx - FIXED VERSION that works with your current setup
+// src/components/dating/SwipeCards.tsx - Complete version with all new features
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -13,11 +13,16 @@ import {
 import { MaterialIcons } from "@expo/vector-icons";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState, AppDispatch } from "@/redux/store";
-import { getPotentialMatches, swipeUser } from "@/api/dating"; // Use your existing API
+import {
+  getPotentialMatches,
+  swipeUser,
+  undoLastSwipe,
+  DatingFilters,
+  UndoSwipeResponse,
+} from "@/api/dating";
 import { DatingProfile } from "@/types/dating";
 import MatchCelebrationModal from "@/components/dating/MatchCelebrationModal";
 import PaywallModal from "@/components/subscription/PaywallModal";
-import { apiClient } from "@/api/apiClient";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 const CARD_WIDTH = screenWidth - 32;
@@ -25,16 +30,22 @@ const CARD_HEIGHT = screenHeight * 0.72;
 
 interface SwipeCardsProps {
   onMatch: (matchData: any) => void;
+  filters?: DatingFilters;
+  onFiltersChange?: (filters: DatingFilters) => void;
 }
 
-const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
+const SwipeCards: React.FC<SwipeCardsProps> = ({
+  onMatch,
+  filters,
+  onFiltersChange,
+}) => {
   const dispatch = useDispatch<AppDispatch>();
   const currentUser = useSelector((state: RootState) => state.user);
   const { current: subscription } = useSelector(
     (state: RootState) => state.subscription
   );
 
-  // Local state instead of Redux for now
+  // Local state
   const [profiles, setProfiles] = useState<DatingProfile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -50,7 +61,7 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
   // Animation values
   const cardOpacity = useRef(new Animated.Value(1)).current;
 
-  // Add this useEffect to manage undo timer
+  // Timer for undo functionality
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
@@ -72,75 +83,19 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
     };
   }, [canUndo, undoTimeLeft]);
 
-  // Check if user can undo swipes based on subscription
-  const canUserUndo = () => {
-    if (!subscription) return false;
-    return subscription.tier !== "FREE"; // Essential+ can undo
-  };
-
-  // Add the undo function
-  const handleUndoSwipe = async () => {
-    if (!canUndo || !lastSwipedProfile) {
-      console.log("❌ Cannot undo - no recent swipe or not available");
-      return;
-    }
-
-    if (!canUserUndo()) {
-      console.log("🚫 Undo not allowed - showing paywall");
-      setPaywallFeature("undo_swipe");
-      setShowPaywallModal(true);
-      return;
-    }
-
-    try {
-      console.log("↩️ Undoing last swipe...");
-
-      const response = await apiClient.post("/dating/undo-swipe");
-      console.log("✅ Undo response:", response.data);
-
-      if (response.data.success) {
-        // Add the profile back to the potential matches at the current index
-        setProfiles((prev) => {
-          const newProfiles = [...prev];
-          newProfiles.splice(currentIndex, 0, response.data.undoneProfile);
-          return newProfiles;
-        });
-
-        // Reset undo state
-        setCanUndo(false);
-        setLastSwipedProfile(null);
-        setUndoTimeLeft(0);
-
-        Alert.alert(
-          "Swipe Undone! ↩️",
-          "We brought them back to your stack. You can swipe again!",
-          [{ text: "Great!" }]
-        );
-      }
-    } catch (error: any) {
-      console.error("❌ Failed to undo swipe:", error);
-
-      if (error.response?.status === 402 || error.response?.status === 403) {
-        // Subscription required
-        setPaywallFeature("undo_swipe");
-        setShowPaywallModal(true);
-      } else {
-        Alert.alert("Error", "Failed to undo swipe. Please try again.");
-      }
-    }
-  };
-
+  // Load matches when component mounts or filters change
   useEffect(() => {
     loadPotentialMatches();
-  }, []);
+  }, [filters]);
 
   const loadPotentialMatches = async () => {
     try {
       setLoading(true);
-      console.log("🔍 Loading potential matches...");
-      const matches = await getPotentialMatches();
+      console.log("🔍 Loading potential matches with filters:", filters);
+      const matches = await getPotentialMatches(filters);
       console.log("📊 API returned:", matches?.length || 0, "profiles");
       setProfiles(matches || []);
+      setCurrentIndex(0); // Reset to first card when loading new matches
     } catch (error) {
       console.error("❌ Error loading matches:", error);
       Alert.alert(
@@ -157,7 +112,7 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
 
     const tier = subscription.tier;
     const superLikesUsed = subscription.dailySuperLikesUsed || 0;
-    let superLikeLimit = 1; // Free tier default
+    let superLikeLimit = 1;
 
     switch (tier) {
       case "ESSENTIAL":
@@ -182,7 +137,64 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
     return canUse;
   };
 
-  // Update the handleSwipe function to enable undo
+  const canUserUndo = () => {
+    if (!subscription) return false;
+    return subscription.tier !== "FREE";
+  };
+
+  const handleUndoSwipe = async () => {
+    if (!canUndo || !lastSwipedProfile) {
+      console.log("❌ Cannot undo - no recent swipe or not available");
+      return;
+    }
+
+    if (!canUserUndo()) {
+      console.log("🚫 Undo not allowed - showing paywall");
+      setPaywallFeature("undo_swipe");
+      setShowPaywallModal(true);
+      return;
+    }
+
+    try {
+      console.log("↩️ Undoing last swipe...");
+
+      const response: UndoSwipeResponse = await undoLastSwipe();
+      console.log("✅ Undo response:", response);
+
+      if (response.success && response.undoneProfile) {
+        // Add the profile back to the potential matches at the current index
+        setProfiles((prev) => {
+          const newProfiles = [...prev];
+          newProfiles.splice(currentIndex, 0, response.undoneProfile!);
+          return newProfiles;
+        });
+
+        // Reset undo state
+        setCanUndo(false);
+        setLastSwipedProfile(null);
+        setUndoTimeLeft(0);
+
+        Alert.alert(
+          "Swipe Undone! ↩️",
+          "We brought them back to your stack. You can swipe again!",
+          [{ text: "Great!" }]
+        );
+      }
+    } catch (error: any) {
+      console.error("❌ Failed to undo swipe:", error);
+
+      if (error.response?.status === 402 || error.response?.status === 403) {
+        setPaywallFeature("undo_swipe");
+        setShowPaywallModal(true);
+      } else {
+        Alert.alert(
+          "Error",
+          error.message || "Failed to undo swipe. Please try again."
+        );
+      }
+    }
+  };
+
   const handleSwipe = async (direction: "LIKE" | "PASS") => {
     if (currentIndex >= profiles.length) {
       console.log("❌ No more profiles to swipe");
@@ -212,7 +224,6 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
     });
 
     try {
-      // Use your existing API
       const response = await swipeUser(
         currentProfile.user?.id || currentProfile.id,
         direction
@@ -230,9 +241,16 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
         setCanUndo(false);
         setLastSwipedProfile(null);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Failed to swipe:", error);
-      Alert.alert("Error", "Failed to record swipe. Please try again.");
+
+      if (error.response?.status === 429) {
+        // Rate limit exceeded
+        setPaywallFeature("daily_swipes");
+        setShowPaywallModal(true);
+      } else {
+        Alert.alert("Error", "Failed to record swipe. Please try again.");
+      }
 
       // If swipe failed, disable undo
       setCanUndo(false);
@@ -256,11 +274,6 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
       return;
     }
 
-    // For now, treat super like as a regular like until backend supports it
-    console.log(
-      "⭐ Sending super like as regular like (backend doesn't support SUPER_LIKE yet)"
-    );
-
     // Animate card out
     Animated.timing(cardOpacity, {
       toValue: 0,
@@ -272,10 +285,10 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
     });
 
     try {
-      // Send as regular like for now
+      // Send super like
       const response = await swipeUser(
         currentProfile.user?.id || currentProfile.id,
-        "LIKE"
+        "SUPER_LIKE"
       );
       console.log("📡 Super like response:", response);
 
@@ -297,13 +310,20 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
         setShowMatchModal(true);
         onMatch(response.match);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Failed to super like:", error);
-      Alert.alert("Error", "Failed to send super like. Please try again.");
+
+      if (error.response?.status === 429) {
+        // Super like limit exceeded
+        setPaywallFeature("super_like");
+        setShowPaywallModal(true);
+      } else {
+        Alert.alert("Error", "Failed to send super like. Please try again.");
+      }
     }
   };
 
-  // Parse JSON fields safely (keeping your existing logic)
+  // Parse JSON fields safely
   const parseJsonField = (field: any) => {
     if (!field) return [];
     if (Array.isArray(field)) {
@@ -332,7 +352,7 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
         <View className="mx-4 mt-4">
           <Text className="text-3xl font-bold text-gray-800 mb-2">
             {profile.user?.displayName || profile.user?.username || "Unknown"},{" "}
-            {profile.age}
+            {profile.age || profile.user?.age}
           </Text>
         </View>
 
@@ -383,6 +403,24 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
                 <MaterialIcons name="work" size={20} color="#666" />
                 <Text className="ml-3 text-gray-800 text-base">
                   {profile.job}
+                </Text>
+              </View>
+            )}
+
+            {profile.lifestyle && (
+              <View className="flex-row items-center">
+                <MaterialIcons name="lifestyle" size={20} color="#666" />
+                <Text className="ml-3 text-gray-800 text-base">
+                  {profile.lifestyle}
+                </Text>
+              </View>
+            )}
+
+            {profile.religion && (
+              <View className="flex-row items-center">
+                <MaterialIcons name="church" size={20} color="#666" />
+                <Text className="ml-3 text-gray-800 text-base">
+                  {profile.religion}
                 </Text>
               </View>
             )}
@@ -494,7 +532,7 @@ const SwipeCards: React.FC<SwipeCardsProps> = ({ onMatch }) => {
           )}
       </View>
 
-      {/* UPDATED BUTTONS with Undo */}
+      {/* Action Buttons */}
       <View
         style={{
           position: "absolute",

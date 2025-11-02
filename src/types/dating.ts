@@ -1,4 +1,4 @@
-// src/types/dating.ts - Clean updated types
+// src/types/dating.ts - Updated with new filter and feature types
 
 // ============================================================================
 // CORE DATING TYPES
@@ -29,11 +29,18 @@ export interface DatingProfile {
     category: string;
     value: string;
   }>;
-  // NEW: Gender field (replaces age - age now comes from user birthday)
-  gender: string; // "MAN" | "WOMAN" | "NON_BINARY" | "OTHER"
+  gender: string;
+  age?: number;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
+  user?: DatingUser;
+  // NEW: Algorithm fields
+  eloScore?: number;
+  totalLikesReceived?: number;
+  totalSwipesReceived?: number;
+  isFreshProfile?: boolean;
+  profileBoostUntil?: string;
 }
 
 export interface CreateDatingProfileRequest {
@@ -60,8 +67,24 @@ export interface CreateDatingProfileRequest {
     category: string;
     value: string;
   }>;
-  // NEW: Gender field is required
   gender: string;
+  age?: number;
+}
+
+// ============================================================================
+// NEW FILTER TYPES
+// ============================================================================
+
+export interface DatingFilters {
+  location?: string;
+  education?: string;
+  lifestyle?: string;
+  religion?: string;
+  relationshipType?: string;
+  drinking?: string;
+  smoking?: string;
+  hasChildren?: string;
+  wantChildren?: string;
 }
 
 // ============================================================================
@@ -69,7 +92,7 @@ export interface CreateDatingProfileRequest {
 // ============================================================================
 
 export interface DatingPreferences {
-  genderPreference: string; // "MEN" | "WOMEN" | "EVERYONE" | "NON_BINARY"
+  genderPreference: string;
   minAge: number;
   maxAge: number;
   maxDistance: number;
@@ -99,13 +122,13 @@ export interface PreferencesUpdateResponse {
 // MATCHING & SWIPING TYPES
 // ============================================================================
 
-export type SwipeDirection = "LIKE" | "PASS" | "SUPER_LIKE"; // ADD SUPER_LIKE
+export type SwipeDirection = "LIKE" | "PASS" | "SUPER_LIKE";
 
 export interface SwipeResponse {
   success: boolean;
   matched: boolean;
   match?: Match;
-  superLike?: boolean; // ADD this field
+  superLike?: boolean;
   error?: string;
 }
 
@@ -132,6 +155,51 @@ export interface Match {
   matchedAt: string;
   isActive: boolean;
   lastActivityAt?: string;
+}
+
+// ============================================================================
+// NEW FEATURE TYPES
+// ============================================================================
+
+export interface UndoSwipeResponse {
+  success: boolean;
+  message?: string;
+  undoneProfile?: DatingProfile;
+  direction?: string;
+  error?: string;
+}
+
+export interface BoostStatus {
+  isBoosted: boolean;
+  canBoost: boolean;
+  boostEndsAt?: string;
+  minutesLeft?: number;
+}
+
+export interface BoostResponse {
+  success: boolean;
+  message?: string;
+  boostEndsAt?: string;
+  boostDurationMinutes?: number;
+  error?: string;
+  upgradeRequired?: boolean;
+}
+
+export interface SubscriptionStatus {
+  tier: string;
+  canSwipe: boolean;
+  canSuperLike: boolean;
+  canBoost: boolean;
+  hasPassportMode: boolean;
+  canSeeWhoLikedMe: boolean;
+  canUndoSwipes: boolean;
+  hasAdvancedFilters: boolean;
+  dailySwipesUsed: number;
+  dailySwipeLimit: number;
+  dailySuperLikesUsed: number;
+  dailySuperLikeLimit: number;
+  monthlyBoostsUsed: number;
+  monthlyBoostLimit: number;
 }
 
 // ============================================================================
@@ -163,7 +231,7 @@ export interface DatingUser {
   email: string;
   profileImageUrl?: string;
   bio?: string;
-  age?: number; // Calculated from birthday
+  age?: number;
   ageConfirmed?: boolean;
   eligibleForDating?: boolean;
   lastActive?: string;
@@ -172,8 +240,8 @@ export interface DatingUser {
 
 export interface PotentialMatch extends DatingProfile {
   user: DatingUser;
-  distance?: number; // Distance in miles/km
-  compatibility?: number; // Compatibility score 0-100
+  distance?: number;
+  compatibility?: number;
 }
 
 // ============================================================================
@@ -250,6 +318,8 @@ export const DATING_CONSTANTS = {
   MAX_PROMPTS: 3,
   MIN_BIO_LENGTH: 10,
   MAX_BIO_LENGTH: 500,
+  UNDO_TIME_LIMIT: 1800, // 30 minutes in seconds
+  BOOST_DURATION: 30, // 30 minutes
 } as const;
 
 export const GENDER_OPTIONS = [
@@ -265,3 +335,36 @@ export const GENDER_PREFERENCE_OPTIONS = [
   { value: GenderPreference.EVERYONE, label: "Everyone", icon: "🌟" },
   { value: GenderPreference.NON_BINARY, label: "Non-binary", icon: "⚧️" },
 ] as const;
+
+// Filter option constants
+export const FILTER_OPTIONS = {
+  lifestyle: [
+    "Active",
+    "Laid back",
+    "Social butterfly",
+    "Homebody",
+    "Adventurous",
+    "Career-focused",
+  ],
+  religion: [
+    "Christian",
+    "Muslim",
+    "Jewish",
+    "Hindu",
+    "Buddhist",
+    "Atheist",
+    "Agnostic",
+    "Spiritual",
+    "Other",
+  ],
+  relationshipType: [
+    "Long-term relationship",
+    "Casual dating",
+    "New friends",
+    "Open to anything",
+  ],
+  drinking: ["Never", "Sometimes", "Frequently"],
+  smoking: ["No", "Sometimes", "Yes"],
+  hasChildren: ["No", "Yes"],
+  wantChildren: ["Yes", "No", "Maybe"],
+} as const;

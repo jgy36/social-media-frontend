@@ -31,43 +31,44 @@ const PaywallModal: React.FC<PaywallModalProps> = ({
 
   const getFeatureInfo = (feature: string) => {
     switch (feature) {
-      case "super_like":
-        return {
-          title: "Out of Super Likes! ⭐",
-          description:
-            "You've used all your daily super likes. Upgrade to get more!",
-          icon: "star",
-          color: "#FFD700",
-          benefits: [
-            "5-10 Super Likes per day",
-            "3x more likely to match",
-            "Stand out from the crowd",
-          ],
-        };
       case "undo_swipe":
         return {
-          title: "Undo That Swipe! ↩️",
+          title: "Undo Swipes",
           description:
-            "Accidentally swiped left? Undo swipes are available with premium!",
+            "Made a mistake? Undo your last swipe within 30 minutes!",
           icon: "undo",
-          color: "#10B981",
-          benefits: [
-            "Undo accidental swipes",
-            "Never miss a connection",
-            "Take back that 'no'",
-          ],
+          tier: "Essential",
+        };
+      case "advanced_filters":
+        return {
+          title: "Advanced Filters",
+          description:
+            "Find exactly who you're looking for with detailed lifestyle, religion, and preference filters.",
+          icon: "tune",
+          tier: "Premium",
+        };
+      case "passport_mode":
+        return {
+          title: "Passport Mode",
+          description:
+            "Change your location and meet people anywhere in the world!",
+          icon: "flight",
+          tier: "Premium",
+        };
+      case "super_like":
+        return {
+          title: "Super Likes",
+          description:
+            "Stand out with Super Likes! Let someone know you're really interested.",
+          icon: "star",
+          tier: "Essential",
         };
       case "boost":
         return {
-          title: "Boost Your Profile! 🚀",
+          title: "Profile Boost",
           description: "Get 10x more profile views for 30 minutes!",
           icon: "trending-up",
-          color: "#8B5CF6",
-          benefits: [
-            "10x more profile views",
-            "Be seen by more people",
-            "Get matches faster",
-          ],
+          tier: "Essential",
         };
       case "see_likes":
         return {

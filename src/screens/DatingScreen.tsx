@@ -1,4 +1,4 @@
-// src/screens/DatingScreen.tsx - Updated with "Who Liked Me" tab
+// src/screens/DatingScreen.tsx - Updated with filter controls and new features
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -19,27 +19,44 @@ import {
   isDatingProfileComplete,
   getCurrentDatingProfile,
   getUserMatches,
-  getWhoLikedMe, // ADD THIS IMPORT
+  getWhoLikedMe,
+  DatingFilters,
 } from "@/api/dating";
 import SwipeCards from "@/components/dating/SwipeCards";
 import MatchesList from "@/components/dating/MatchesList";
-import LikesList from "@/components/dating/LikesList"; // WE'LL CREATE THIS
+import LikesList from "@/components/dating/LikesList";
+import AdvancedFiltersModal from "@/components/dating/AdvancedFiltersModal";
+import LocationSelector from "@/components/dating/LocationSelector";
+import BoostModal from "@/components/dating/BoostModal";
+import PaywallModal from "@/components/subscription/PaywallModal";
 
 const { width } = Dimensions.get("window");
 
 const DatingScreen = () => {
   const navigation = useNavigation<RootStackNavigationProp>();
   const user = useSelector((state: RootState) => state.user);
+  const { current: subscription } = useSelector(
+    (state: RootState) => state.subscription
+  );
 
   const [hasCompletedProfile, setHasCompletedProfile] = useState(false);
   const [activeTab, setActiveTab] = useState<"discover" | "matches" | "likes">(
     "discover"
-  ); // ADD "likes"
+  );
   const [matches, setMatches] = useState<any[]>([]);
-  const [likes, setLikes] = useState<any[]>([]); // ADD THIS STATE
-  const [likeCount, setLikeCount] = useState(0); // ADD THIS STATE
+  const [likes, setLikes] = useState<any[]>([]);
+  const [likeCount, setLikeCount] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // NEW STATES FOR FILTERS AND MODALS
   const [showBoostModal, setShowBoostModal] = useState(false);
+  const [showFiltersModal, setShowFiltersModal] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [paywallFeature, setPaywallFeature] = useState<string | null>(null);
+  const [currentFilters, setCurrentFilters] = useState<DatingFilters>({});
+  const [currentLocation, setCurrentLocation] =
+    useState<string>("Your Location");
 
   const translateX = useRef(new Animated.Value(0)).current;
   const activeTabRef = useRef(activeTab);
@@ -52,8 +69,20 @@ const DatingScreen = () => {
   useEffect(() => {
     checkDatingProfile();
     loadMatches();
-    loadLikes(); // ADD THIS
+    loadLikes();
+    loadUserLocation();
   }, []);
+
+  const loadUserLocation = async () => {
+    try {
+      const profile = await getCurrentDatingProfile();
+      if (profile?.location) {
+        setCurrentLocation(profile.location);
+      }
+    } catch (error) {
+      console.error("Failed to load user location:", error);
+    }
+  };
 
   const checkDatingProfile = async () => {
     try {
@@ -92,7 +121,6 @@ const DatingScreen = () => {
     }
   };
 
-  // ADD THIS NEW FUNCTION
   const loadLikes = async () => {
     try {
       const userLikes = await getWhoLikedMe();
@@ -100,7 +128,6 @@ const DatingScreen = () => {
       setLikeCount(userLikes.length);
     } catch (error) {
       console.error("Failed to load likes:", error);
-      // If user doesn't have permission, set count to 0
       setLikes([]);
       setLikeCount(0);
     }
@@ -130,7 +157,29 @@ const DatingScreen = () => {
     );
   };
 
-  // Update pan responder to handle 3 tabs
+  const handleLocationChange = (location: string) => {
+    setCurrentLocation(location);
+    // Update filters to include new location
+    const newFilters = { ...currentFilters, location };
+    setCurrentFilters(newFilters);
+  };
+
+  const handleFiltersChange = (filters: DatingFilters) => {
+    setCurrentFilters(filters);
+  };
+
+  const showPaywall = (feature: string) => {
+    setPaywallFeature(feature);
+    setShowPaywallModal(true);
+  };
+
+  const getActiveFilterCount = () => {
+    return Object.values(currentFilters).filter(
+      (value) => value && value.trim() !== ""
+    ).length;
+  };
+
+  // Pan responder for tab switching
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
@@ -158,14 +207,12 @@ const DatingScreen = () => {
         }).start();
 
         if (gestureState.dx > swipeThreshold) {
-          // Swipe right - go to previous tab
           if (currentTab === "matches") {
             setActiveTab("discover");
           } else if (currentTab === "likes") {
             setActiveTab("matches");
           }
         } else if (gestureState.dx < -swipeThreshold) {
-          // Swipe left - go to next tab
           if (currentTab === "discover") {
             setActiveTab("matches");
           } else if (currentTab === "matches") {
@@ -238,29 +285,73 @@ const DatingScreen = () => {
         <View className="flex-row items-center justify-between">
           <Text className="text-xl font-bold text-white">Dating</Text>
 
-          <TouchableOpacity
-            onPress={() => navigation.navigate("DatingSettings")}
-            className="p-2"
-          >
-            <MaterialIcons name="settings" size={24} color="#9CA3AF" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setShowBoostModal(true)}
-            className="p-2 mr-2"
-          >
-            <MaterialIcons name="trending-up" size={24} color="#8B5CF6" />
-          </TouchableOpacity>
-          <BoostModal
-            visible={showBoostModal}
-            onClose={() => setShowBoostModal(false)}
-            onBoostSuccess={() => {
-              console.log("Profile boosted successfully!");
-              // Optionally refresh data
-            }}
-          />
+          <View className="flex-row items-center">
+            {/* Filter Controls - Only show on discover tab */}
+            {activeTab === "discover" && (
+              <>
+                {/* Location Button */}
+                <TouchableOpacity
+                  onPress={() => setShowLocationModal(true)}
+                  className="p-2 mr-2"
+                >
+                  <MaterialIcons name="location-on" size={24} color="#9CA3AF" />
+                </TouchableOpacity>
+
+                {/* Filters Button */}
+                <TouchableOpacity
+                  onPress={() => setShowFiltersModal(true)}
+                  className="p-2 mr-2"
+                  style={{ position: "relative" }}
+                >
+                  <MaterialIcons name="tune" size={24} color="#9CA3AF" />
+                  {getActiveFilterCount() > 0 && (
+                    <View
+                      style={{
+                        position: "absolute",
+                        top: 4,
+                        right: 4,
+                        backgroundColor: "#8B5CF6",
+                        borderRadius: 8,
+                        width: 16,
+                        height: 16,
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "white",
+                          fontSize: 10,
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {getActiveFilterCount()}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {/* Boost Button */}
+                <TouchableOpacity
+                  onPress={() => setShowBoostModal(true)}
+                  className="p-2 mr-2"
+                >
+                  <MaterialIcons name="trending-up" size={24} color="#8B5CF6" />
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Settings Button */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate("DatingSettings")}
+              className="p-2"
+            >
+              <MaterialIcons name="settings" size={24} color="#9CA3AF" />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Tab Selector - NOW WITH 3 TABS */}
+        {/* Tab Selector */}
         <View className="flex-row mt-4">
           <TouchableOpacity
             onPress={() => setActiveTab("discover")}
@@ -300,7 +391,6 @@ const DatingScreen = () => {
             </Text>
           </TouchableOpacity>
 
-          {/* ADD NEW LIKES TAB */}
           <TouchableOpacity
             onPress={() => setActiveTab("likes")}
             className="pb-2"
@@ -329,7 +419,11 @@ const DatingScreen = () => {
         {...panResponder.panHandlers}
       >
         {activeTab === "discover" ? (
-          <SwipeCards onMatch={handleNewMatch} />
+          <SwipeCards
+            onMatch={handleNewMatch}
+            filters={currentFilters}
+            onFiltersChange={handleFiltersChange}
+          />
         ) : activeTab === "matches" ? (
           <MatchesList
             matches={matches}
@@ -342,8 +436,6 @@ const DatingScreen = () => {
             }}
           />
         ) : (
-          // ADD LIKES LIST COMPONENT
-          // In DatingScreen.tsx, update the LikesList usage:
           <LikesList
             likes={likes}
             onLikePress={(profile) => {
@@ -351,19 +443,51 @@ const DatingScreen = () => {
             }}
             onRefresh={loadLikes}
             onNewMatch={(matchData) => {
-              // ADD THIS CALLBACK
               console.log("🎉 New match from likes:", matchData);
-
-              // Add to matches list
               setMatches((prev) => [matchData, ...prev]);
-
-              // Refresh both lists
               loadMatches();
               loadLikes();
             }}
           />
         )}
       </Animated.View>
+
+      {/* MODALS */}
+
+      {/* Advanced Filters Modal */}
+      <AdvancedFiltersModal
+        visible={showFiltersModal}
+        onClose={() => setShowFiltersModal(false)}
+        currentFilters={currentFilters}
+        onFiltersChange={handleFiltersChange}
+        onShowPaywall={() => showPaywall("advanced_filters")}
+      />
+
+      {/* Location Selector Modal */}
+      <LocationSelector
+        visible={showLocationModal}
+        onClose={() => setShowLocationModal(false)}
+        currentLocation={currentLocation}
+        onLocationChange={handleLocationChange}
+        onShowPaywall={() => showPaywall("passport_mode")}
+      />
+
+      {/* Boost Modal */}
+      <BoostModal
+        visible={showBoostModal}
+        onClose={() => setShowBoostModal(false)}
+        onBoostSuccess={() => {
+          console.log("Profile boosted successfully!");
+        }}
+      />
+
+      {/* Paywall Modal */}
+      <PaywallModal
+        visible={showPaywallModal}
+        feature={paywallFeature}
+        onClose={() => setShowPaywallModal(false)}
+        onUpgrade={() => setShowPaywallModal(false)}
+      />
     </SafeAreaView>
   );
 };
